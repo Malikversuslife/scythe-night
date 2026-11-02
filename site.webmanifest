@@ -1,0 +1,13 @@
+{
+  "name": "Scythe Night",
+  "short_name": "Scythe Night",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#251638",
+  "theme_color": "#251638",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
