@@ -7,7 +7,7 @@
   <title>Scythe Night</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Butcherman&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Butcherman&family=Lilita+One&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -34,8 +34,8 @@
           <span class="visually-hidden">Play</span>
         </button>
         <div class="splash-row">
-          <button id="btn-splash-settings" class="stone-btn small" type="button">⚙ Settings</button>
-          <button id="btn-splash-sound" class="stone-btn small" type="button" aria-pressed="false">🔊 Sound on</button>
+          <button id="btn-splash-settings" class="stone-btn small" type="button"><img class="btn-icon" src="assets/img/ui/icon-gear.png" alt="">Settings</button>
+          <button id="btn-splash-sound" class="stone-btn small" type="button" aria-pressed="false"><img class="btn-icon" src="assets/img/ui/icon-sound.png" alt=""><span>Sound on</span></button>
         </div>
         <p class="version">V-0.5.0 // SECTOR 7</p>
       </div>
@@ -50,10 +50,10 @@
         </div>
         <div class="topbar-buttons">
           <button id="btn-select-back" class="round-btn" type="button" aria-label="Back to title">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+            <img src="assets/img/ui/icon-back.png" alt="">
           </button>
           <button id="btn-select-settings" class="round-btn" type="button" aria-label="Settings">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+            <img src="assets/img/ui/icon-gear.png" alt="">
           </button>
         </div>
       </header>
@@ -90,8 +90,8 @@
         <ul id="intro-controls" class="rule-list compact"></ul>
         <p class="fine-print">Closing or refreshing the page ends the current run. Settings and records are kept.</p>
         <div class="panel-actions">
-          <button id="btn-intro-back" class="stone-btn" type="button">◀ Back</button>
-          <button id="btn-intro-start" class="stone-btn primary" type="button">▶ Start</button>
+          <button id="btn-intro-back" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-back.png" alt="">Back</button>
+          <button id="btn-intro-start" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Start</button>
         </div>
       </div>
     </section>
@@ -101,21 +101,27 @@
       <header class="hud" id="hud">
         <div class="hud-left" id="hud-left"></div>
         <div class="hud-right">
+          <div class="hud-buttons">
+            <button id="btn-hud-sound" class="round-btn" type="button" aria-label="Sound on" aria-pressed="true">
+              <img src="assets/img/ui/icon-sound.png" alt="">
+            </button>
+            <button id="btn-pause" class="round-btn" type="button" aria-label="Pause (Escape)">
+              <img src="assets/img/ui/icon-pause.png" alt="">
+            </button>
+          </div>
           <div class="hud-stats" id="hud-stats"></div>
-          <button id="btn-pause" class="round-btn img-btn" type="button" aria-label="Pause (Escape)">
-            <img src="assets/img/btn-pause.png" alt="">
-          </button>
         </div>
       </header>
       <div class="hud-sub" id="hud-sub" aria-hidden="true"></div>
       <div class="viewport" id="viewport">
         <canvas id="game-canvas" aria-describedby="canvas-desc"></canvas>
+        <div class="vignette" aria-hidden="true"></div>
         <p id="canvas-desc" class="visually-hidden">Top-down game view. Current objective and status are announced in the status area.</p>
         <div class="toast" id="toast" aria-hidden="true"></div>
       </div>
       <div class="controls" id="controls">
         <div class="joystick" id="joystick" aria-hidden="true">
-          <div class="joystick-base"><span class="arrow up"></span><span class="arrow down"></span><span class="arrow left"></span><span class="arrow right"></span></div>
+          <div class="joystick-base"></div>
           <img class="joystick-knob" id="joystick-knob" src="assets/img/btn-skull.png" alt="" draggable="false">
         </div>
         <div class="action-wrap">
@@ -130,7 +136,6 @@
     <!-- Results -->
     <section id="screen-results" class="screen screen-results bg-cemetery dim" aria-labelledby="results-title" hidden>
       <div class="stone-panel results-panel">
-        <div class="panel-emblem" aria-hidden="true">☠</div>
         <h1 id="results-title" class="display-title"></h1>
         <p id="results-reason" class="results-reason"></p>
         <table class="results-table" id="results-table"><tbody></tbody></table>
@@ -142,8 +147,8 @@
         <p id="results-ending" class="results-ending"></p>
       </div>
       <div class="results-actions">
-        <button id="btn-retry" class="stone-btn primary" type="button">⟳ Retry</button>
-        <button id="btn-results-select" class="stone-btn" type="button">☰ Story select</button>
+        <button id="btn-retry" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-restart.png" alt="">Retry</button>
+        <button id="btn-results-select" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">Stories</button>
       </div>
     </section>
 
@@ -152,11 +157,11 @@
       <div class="stone-panel overlay-panel">
         <h2 id="pause-title" class="display-title">Paused</h2>
         <div class="menu-stack">
-          <button id="btn-resume" class="stone-btn primary" type="button">▶ Resume</button>
-          <button id="btn-restart" class="stone-btn" type="button">⟳ Restart</button>
-          <button id="btn-pause-controls" class="stone-btn" type="button">✋ Controls</button>
-          <button id="btn-pause-settings" class="stone-btn" type="button">⚙ Settings</button>
-          <button id="btn-pause-select" class="stone-btn" type="button">☰ Story select</button>
+          <button id="btn-resume" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Resume</button>
+          <button id="btn-restart" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-restart.png" alt="">Restart</button>
+          <button id="btn-pause-controls" class="stone-btn" type="button">Controls</button>
+          <button id="btn-pause-settings" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-gear.png" alt="">Settings</button>
+          <button id="btn-pause-select" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">Story select</button>
         </div>
       </div>
     </div>
@@ -211,7 +216,7 @@
         <p class="fine-print">Keyboard: move with WASD or arrow keys. Slash with Space or J. Interact with E or Space. Pause with Escape or P.</p>
         <p class="fine-print" id="storage-note" hidden>Progress will not be saved on this device.</p>
         <div class="menu-stack">
-          <button id="btn-settings-close" class="stone-btn primary" type="button">Done</button>
+          <button id="btn-settings-close" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Done</button>
           <button id="btn-reset-data" class="stone-btn danger small" type="button">Reset saved data</button>
         </div>
       </div>

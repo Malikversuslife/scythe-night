@@ -1,6 +1,8 @@
 import { createStore } from './storage.js';
 import { createInput } from './input.js';
 import { createRenderer } from './render.js';
+import { KEEPER_IMAGES } from './render-keeper.js';
+import { SURVIVOR_IMAGES } from './render-survivor.js';
 import { createKeeperRun, stepKeeper, KEEPER } from './keeper.js';
 import { createSurvivorRun, stepSurvivor, interactionTarget, taskIndex, TASKS } from './survivor.js';
 import * as audio from './audio.js';
@@ -55,12 +57,9 @@ const ICONS = {
 // ---------------- Boot ----------------
 
 const IMAGE_SRC = {
-  reaper: 'assets/img/sprite-reaper.png',
-  survivor: 'assets/img/sprite-survivor.png',
-  zombie: 'assets/img/sprite-zombie.png',
-  zombieRise: 'assets/img/sprite-zombie-rise.png',
-  soul: 'assets/img/sprite-soul.png',
-  grave: 'assets/img/sprite-grave.png',
+  backdrop: 'assets/img/bg-cemetery.jpg',
+  ...KEEPER_IMAGES,
+  ...SURVIVOR_IMAGES,
 };
 const PRELOAD = ['assets/img/bg-cemetery.jpg', 'assets/img/title-logo.webp', 'assets/img/banner-tap.png',
   'assets/img/banner-select.png', 'assets/img/card-keeper.webp', 'assets/img/card-survivor.webp'];
@@ -113,8 +112,14 @@ function applySettings() {
   audio.setAudioSettings(s);
   app.classList.toggle('motion-ok', !reducedMotion());
   const sound = $('btn-splash-sound');
-  sound.textContent = s.muted ? '🔇 Sound off' : '🔊 Sound on';
+  const soundIcon = `assets/img/ui/icon-${s.muted ? 'mute' : 'sound'}.png`;
+  sound.querySelector('img').src = soundIcon;
+  sound.querySelector('span').textContent = s.muted ? 'Sound off' : 'Sound on';
   sound.setAttribute('aria-pressed', String(!s.muted));
+  const hudSound = $('btn-hud-sound');
+  hudSound.setAttribute('aria-pressed', String(!s.muted));
+  hudSound.setAttribute('aria-label', s.muted ? 'Sound off' : 'Sound on');
+  hudSound.querySelector('img').src = soundIcon;
   $('storage-note').hidden = store.available;
 }
 motionQuery.addEventListener?.('change', applySettings);
@@ -313,6 +318,11 @@ const input = createInput({
 });
 
 $('btn-pause').addEventListener('click', () => pause());
+$('btn-hud-sound').addEventListener('click', () => {
+  audio.unlockAudio();
+  store.update((d) => { d.settings.muted = !d.settings.muted; });
+  applySettings();
+});
 
 // ---------------- Runs ----------------
 
@@ -320,6 +330,7 @@ function startRun() {
   closeAllOverlays();
   run = campaign === 'keeper' ? createKeeperRun() : createSurvivorRun();
   hudCache = {};
+  renderer.reset();
   setupHud();
   setState('playing');
   input.clear();
@@ -415,6 +426,7 @@ window.addEventListener('blur', autoPause);
 // ---------------- HUD ----------------
 
 let hudCache = {};
+const TASK_ICONS = { fuse: 'fuse', power: 'powerbox-on', bell: 'bell-frame' };
 function setHtml(el, key, html) {
   if (hudCache[key] === html) return;
   hudCache[key] = html;
@@ -435,16 +447,19 @@ function setupHud() {
 
 function updateHud() {
   if (!run) return;
+  const hudH = $('hud').offsetHeight;
+  if (hudCache.hudH !== hudH) { hudCache.hudH = hudH; $('hud-sub').style.top = `${hudH}px`; }
   if (run.campaign === 'keeper') {
     const hearts = Array.from({ length: KEEPER.maxHealth }, (_, i) =>
-      `<span class="heart${i < run.health ? '' : ' lost'}">❤️</span>`).join('');
-    setHtml($('hud-left'), 'left',
-      `<div class="hud-chip" role="img" aria-label="Health ${run.health} of ${KEEPER.maxHealth}"><span class="hearts">${hearts}</span>${run.health}/${KEEPER.maxHealth}</div>` +
-      `<div class="hud-chip score"><span class="lbl">Score</span>${run.score.toLocaleString()}</div>`);
+      `<img src="assets/img/v2/heart-${i < run.health ? 'full' : 'empty'}.png" alt="">`).join('');
     const warn = run.breaches >= KEEPER.maxBreaches - 1 ? ' warn' : '';
+    setHtml($('hud-left'), 'left',
+      `<div class="score-panel"><img src="assets/img/v2/hud-lantern.png" alt=""><div><strong>${run.score.toLocaleString()}</strong><span>Score</span></div></div>` +
+      `<div class="hud-row"><div class="heart-row" role="img" aria-label="Health ${run.health} of ${KEEPER.maxHealth}">${hearts}</div>` +
+      `<div class="hud-chip breach${warn}" aria-label="Gate breaches ${run.breaches} of ${KEEPER.maxBreaches}"><span class="lbl">Gate</span>${run.breaches}/${KEEPER.maxBreaches}</div></div>`);
     setHtml($('hud-stats'), 'stats',
-      `<div class="hud-chip"><span class="lbl">Wave</span>${run.wave + 1}/${KEEPER.waves.length}</div>` +
-      `<div class="hud-chip breach${warn}"><span class="lbl">Gate</span>${run.breaches}/${KEEPER.maxBreaches}</div>`);
+      `<div class="wave-box"><span class="lbl">WAVE</span><strong>${run.wave + 1}/${KEEPER.waves.length}</strong></div>` +
+      `<div class="hud-chip" aria-label="Undead left this wave">💀 ${run.queue + run.enemies.length}</div>`);
     let goal;
     if (run.phase === 'seal') goal = 'Wave clear! Touch the glowing seal ✦';
     else if (run.phase === 'intermission') goal = 'Next wave incoming…';
@@ -456,15 +471,21 @@ function updateHud() {
   } else {
     const i = taskIndex(run);
     const label = i >= 0 ? TASKS[i].label : 'Enter the refuge door';
+    const icon = i >= 0 ? TASK_ICONS[TASKS[i].id] : 'door-open';
     const doneCount = TASKS.filter((t) => run.done[t.id]).length;
-    setHtml($('hud-left'), 'left', `<div class="hud-task"><span class="lbl">Current task</span>${label}</div>`);
-    setHtml($('hud-stats'), 'stats', `<div class="hud-chip souls"><span class="lbl">Tasks</span>${doneCount}/${TASKS.length}</div>`);
+    const steps = TASKS.map((t) =>
+      `<span class="task-step${run.done[t.id] ? ' done' : ''}" title="${t.short}"><img src="assets/img/v2/${TASK_ICONS[t.id]}.png" alt=""></span>`).join('');
+    setHtml($('hud-left'), 'left',
+      `<div class="score-panel task-panel"><img src="assets/img/v2/${icon}.png" alt=""><div><span>Current task</span><strong>${label}</strong></div></div>` +
+      `<div class="hud-row" role="img" aria-label="Tasks done ${doneCount} of ${TASKS.length}">${steps}</div>`);
+    const t = Math.floor(run.time);
+    setHtml($('hud-stats'), 'stats', `<div class="wave-box"><span class="lbl">TIME</span><strong>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</strong></div>`);
     const it = interactionTarget(run);
     const btn = $('btn-action');
     btn.setAttribute('aria-disabled', String(!(it && it.enabled)));
     setHtml($('action-label'), 'act', it ? it.hint : 'Interact');
-    const t = Math.floor(run.time);
-    setHtml($('hud-sub'), 'sub', `Time ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')} · ${run.doorOpen ? 'The refuge is open!' : 'One touch and you’re caught.'}`);
+    const hunted = run.zombies.some((z) => z.state === 'chase');
+    setHtml($('hud-sub'), 'sub', run.doorOpen ? 'The refuge is open! Get inside.' : hunted ? '<span style="color:#ff8a8a">You’ve been spotted — break line of sight!</span>' : 'One touch and you’re caught.');
   }
 }
 
@@ -473,6 +494,7 @@ function updateHud() {
 let stepSoundTimer = 0;
 function handleEvents(events) {
   for (const ev of events) {
+    renderer.event(ev, run);
     switch (ev.type) {
       case 'slash': audio.sfx.slash(); break;
       case 'defeat': audio.sfx.hit(); break;
@@ -537,6 +559,8 @@ function endRun() {
   win ? audio.sfx.victory() : audio.sfx.defeat();
 }
 
+const rowIcon = (name) => `<img class="row-icon" src="assets/img/v2/${name}.png" alt="">`;
+
 function showResults(r, win) {
   if (run !== r) return;
   closeAllOverlays();
@@ -549,14 +573,15 @@ function showResults(r, win) {
     $('results-reason').textContent = win
       ? 'All three breaches are sealed.'
       : r.outcome.reason === 'breach' ? `${KEEPER.maxBreaches} undead slipped through the gate.` : 'You took three hits.';
-    rows.push(['💀 Undead slain', `${r.stats.defeated} × ${KEEPER.score.defeat}`]);
-    rows.push(['✨ Souls collected', `${r.stats.souls} × ${KEEPER.score.soul}`]);
-    rows.push(['🔒 Waves sealed', `${r.stats.seals} × ${KEEPER.score.seal}`]);
+    rows.push([`${rowIcon('skull')}Undead slain`, `${r.stats.defeated} × ${KEEPER.score.defeat}`]);
+    rows.push([`${rowIcon('soul-flame')}Souls collected`, `${r.stats.souls} × ${KEEPER.score.soul}`]);
+    rows.push([`${rowIcon('seal-sigil')}Waves sealed`, `${r.stats.seals} × ${KEEPER.score.seal}`]);
     if (win) {
-      rows.push(['❤️ Health bonus', `${r.health} × ${KEEPER.score.healthBonus}`]);
-      rows.push(['🚪 Gate bonus', `${KEEPER.maxBreaches - r.breaches} × ${KEEPER.score.breachBonus}`]);
+      rows.push([`${rowIcon('heart-full')}Health bonus`, `${r.health} × ${KEEPER.score.healthBonus}`]);
+      rows.push([`${rowIcon('sparkle')}Gate bonus`, `${KEEPER.maxBreaches - r.breaches} × ${KEEPER.score.breachBonus}`]);
     }
     $('results-total').hidden = false;
+    $('results-total').querySelector('img').src = 'assets/img/v2/soul-flame.png';
     $('results-total-label').textContent = 'Total score';
     $('results-total-value').textContent = r.score.toLocaleString();
     const prev = store.data.keeperBest;
@@ -570,7 +595,7 @@ function showResults(r, win) {
   } else {
     $('results-title').textContent = win ? 'Safe at last' : 'Caught in the streets';
     $('results-reason').textContent = win ? 'Mara reached the dawn refuge.' : 'A zombie caught Mara.';
-    for (const t of TASKS) rows.push([t.short, r.done[t.id] ? '✓ Done' : '—']);
+    for (const t of TASKS) rows.push([`${rowIcon(TASK_ICONS[t.id])}${t.short}`, r.done[t.id] ? '✓ Done' : '—']);
     const t = Math.floor(r.time);
     rows.push(['Time', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`]);
     $('results-total').hidden = true;
@@ -617,10 +642,23 @@ function frame(now) {
     }
   }
   updateHud();
-  renderer.draw(run, { time: animTime, reducedMotion: reducedMotion() });
+  renderer.draw(run, { time: animTime, reducedMotion: reducedMotion(), insets: viewInsets() });
+}
+
+// The HUD and touch controls float over the canvas; the camera keeps the player between them.
+function viewInsets() {
+  const vp = $('viewport').getBoundingClientRect();
+  const hud = $('hud-sub').getBoundingClientRect();
+  const controls = $('controls').getBoundingClientRect();
+  return { top: Math.max(0, hud.bottom - vp.top), bottom: Math.max(0, vp.bottom - controls.top) };
 }
 
 new ResizeObserver(() => renderer?.resize()).observe($('viewport'));
+
+// Inspection hook for manual testing only: open the game with ?debug.
+if (new URLSearchParams(location.search).has('debug')) {
+  window.__scythe = { get run() { return run; }, get state() { return state; } };
+}
 
 applySettings();
 requestAnimationFrame(frame);

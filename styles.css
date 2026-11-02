@@ -17,6 +17,11 @@
   --safe-t: env(safe-area-inset-top, 0px);
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-display: "Butcherman", "Impact", "Arial Black", system-ui, sans-serif;
+  /* Chunky rounded face for buttons, HUD numbers and labels, like the reference kit. */
+  --font-chunky: "Lilita One", "Arial Rounded MT Bold", "Arial Black", system-ui, sans-serif;
+  /* Thick dark outline around light text on stone. */
+  --ink-outline: 0 2px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink),
+    1.5px 1.5px 0 var(--ink), -1.5px 1.5px 0 var(--ink), 1.5px -1.5px 0 var(--ink), -1.5px -1.5px 0 var(--ink);
   color-scheme: dark;
 }
 
@@ -131,32 +136,41 @@ img { user-select: none; -webkit-user-drag: none; }
 
 button { font: inherit; }
 
+/* Carved stone slab, stretched by its corners (9-slice) so any label fits. */
 .stone-btn {
-  min-height: 48px;
-  min-width: 48px;
-  padding: 10px 20px;
-  border: 3px solid var(--ink);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #7a6d8e 0%, var(--stone-mid) 55%, #4a4058 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 58px;
+  min-width: 58px;
+  padding: 2px 8px 4px;
+  border: 20px solid transparent;
+  border-image: url("assets/img/ui/slab.png") 42 fill / 20px stretch;
+  background: none;
   color: var(--text);
-  font-weight: 800;
-  font-size: 17px;
-  letter-spacing: .6px;
+  font-family: var(--font-chunky);
+  font-weight: 400;
+  font-size: 21px;
+  line-height: 1;
+  letter-spacing: .8px;
   text-transform: uppercase;
-  text-shadow: 0 2px 0 var(--ink);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -4px 0 rgba(0, 0, 0, .3), 0 4px 0 var(--ink);
+  text-shadow: var(--ink-outline);
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .55));
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform .06s ease, box-shadow .06s ease;
+  transition: transform .06s ease, filter .06s ease;
 }
 
+.stone-btn .btn-icon { width: 26px; height: 26px; object-fit: contain; margin: -4px 0 -4px -4px; }
 .stone-btn.primary { color: var(--soul); }
 .stone-btn.danger { color: var(--danger); }
-.stone-btn.small { min-height: 48px; font-size: 14px; padding: 8px 14px; }
+.stone-btn.small { min-height: 50px; font-size: 16px; border-width: 16px; border-image-width: 16px; padding: 0 4px 2px; }
+.stone-btn.small .btn-icon { width: 20px; height: 20px; }
 
 .stone-btn:active, .stone-btn.pressed {
   transform: translateY(3px);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .1), inset 0 -2px 0 rgba(0, 0, 0, .3), 0 1px 0 var(--ink);
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .55)) brightness(.92);
 }
 
 :focus-visible {
@@ -164,12 +178,13 @@ button { font: inherit; }
   outline-offset: 3px;
 }
 
+/* Round carved stone button with a lime icon in the middle. */
 .round-btn {
-  width: 52px; height: 52px;
+  width: 54px; height: 54px;
+  border: 0;
   border-radius: 50%;
-  border: 3px solid var(--ink);
-  background: radial-gradient(circle at 50% 40%, #4c445a, #2c2536);
-  box-shadow: inset 0 0 0 3px #5e566c, 0 3px 0 var(--ink);
+  background: url("assets/img/ui/round.png") center / contain no-repeat;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .55));
   display: grid;
   place-items: center;
   padding: 0;
@@ -177,18 +192,9 @@ button { font: inherit; }
   touch-action: manipulation;
 }
 
-.round-btn svg {
-  width: 26px; height: 26px;
-  fill: none;
-  stroke: var(--soul);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.round-btn.img-btn { background: none; border: 0; box-shadow: none; }
-.round-btn.img-btn img { width: 100%; height: 100%; object-fit: contain; }
-.round-btn:active { transform: translateY(2px); }
+.round-btn img { width: 46%; height: 46%; object-fit: contain; }
+.round-btn:active { transform: translateY(2px); filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .55)) brightness(.92); }
+.round-btn[aria-pressed="false"] img { opacity: .9; }
 
 .banner-btn {
   background: none;
@@ -269,16 +275,16 @@ button { font: inherit; }
 .best-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 16px 4px 6px;
-  border: 3px solid var(--ink);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #3e3549, #27202f);
+  gap: 6px;
+  padding: 0 10px 0 0;
+  border: 14px solid transparent;
+  border-image: url("assets/img/ui/slab.png") 42 fill / 14px stretch;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .55));
 }
 
-.best-pill img { width: 34px; height: 46px; object-fit: contain; }
-.best-pill strong { display: block; font-size: 20px; line-height: 1; }
-.best-pill span { font-size: 11px; font-weight: 800; color: var(--soul); text-transform: uppercase; letter-spacing: 1px; }
+.best-pill img { width: 30px; height: 46px; object-fit: contain; margin: -12px 0 -12px -6px; }
+.best-pill strong { display: block; font-family: var(--font-chunky); font-weight: 400; font-size: 22px; line-height: 1; text-shadow: var(--ink-outline); }
+.best-pill span { font-family: var(--font-chunky); font-size: 12px; color: var(--soul); text-transform: uppercase; letter-spacing: 1px; text-shadow: var(--ink-outline); }
 
 .select-banner { margin: 14px auto 6px; width: min(86%, 340px); }
 .select-banner img { width: 100%; display: block; }
@@ -336,18 +342,31 @@ button { font: inherit; }
 
 /* ---------- Stone panel ---------- */
 
+/* Carved stone board (9-slice) with the winged-skull crest on top. */
 .stone-panel {
   position: relative;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(0, 0, 0, .15)),
-    #3a3346;
-  border: 4px solid var(--ink);
-  border-radius: 18px;
-  box-shadow: inset 0 0 0 6px #5c5369, inset 0 0 0 9px var(--ink), 0 6px 0 rgba(0, 0, 0, .5);
-  padding: 22px 20px 20px;
+  border: 30px solid transparent;
+  border-image: url("assets/img/ui/board.png") 56 fill / 30px stretch;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, .5));
+  padding: 8px 4px 4px;
 }
 
+.stone-panel::before {
+  content: '';
+  position: absolute;
+  top: -58px;
+  left: 50%;
+  width: 150px;
+  height: 56px;
+  transform: translateX(-50%);
+  background: url("assets/img/ui/board-emblem.png") center bottom / contain no-repeat;
+  pointer-events: none;
+}
+
+.stone-panel .display-title { margin-top: 6px; }
+
 .intro-panel { margin: auto 0; }
+.screen-intro { padding-top: calc(48px + var(--safe-t)); }
 
 .intro-sprite {
   display: block;
@@ -368,13 +387,14 @@ button { font: inherit; }
 .rule-list li { margin-bottom: 4px; }
 .rule-list.compact { font-size: 14px; }
 .rule-list kbd {
-  font-family: inherit;
-  font-weight: 700;
+  font-family: var(--font-chunky);
   font-size: .9em;
-  padding: 1px 6px;
-  border-radius: 5px;
-  border: 1px solid #000;
-  background: #2a2333;
+  padding: 1px 7px 2px;
+  border-radius: 6px;
+  border: 2px solid var(--ink);
+  background: linear-gradient(180deg, #6e6386, #4b4259);
+  color: var(--text);
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .panel-actions {
@@ -389,47 +409,106 @@ button { font: inherit; }
 
 /* ---------- Game ---------- */
 
+/* The game view fills the screen; HUD and controls float over it. */
 .screen-game {
   padding: 0;
   overflow: hidden;
   background: var(--ink);
-  display: grid;
-  grid-template-rows: auto auto 1fr calc(var(--controls-h) + var(--safe-b));
+  display: block;
 }
+
+.screen-game .viewport { position: absolute; inset: 0; }
 
 .hud {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 2;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  min-height: var(--hud-h);
-  padding: calc(8px + var(--safe-t)) 12px 6px;
-  background: linear-gradient(180deg, #1c1228, #241634);
-  border-bottom: 3px solid var(--ink);
+  padding: calc(10px + var(--safe-t)) 12px 4px;
+  background: linear-gradient(180deg, rgba(14, 7, 24, .78) 0%, rgba(14, 7, 24, .45) 70%, rgba(14, 7, 24, 0) 100%);
+  pointer-events: none;
 }
 
-.hud-left, .hud-right, .hud-stats { display: flex; align-items: center; gap: 8px; }
-.hud-left { flex-wrap: wrap; min-width: 0; }
-.hud-right { flex-shrink: 0; }
-.hud-right .round-btn { width: 52px; height: 52px; }
+.hud button { pointer-events: auto; }
+.hud-left, .hud-right { display: flex; flex-direction: column; gap: 6px; }
+.hud-left { align-items: flex-start; min-width: 0; }
+.hud-right { align-items: flex-end; flex-shrink: 0; }
+.hud-buttons { display: flex; gap: 8px; }
+.hud-buttons .round-btn { width: 50px; height: 50px; }
+.hud-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hud-row { display: flex; align-items: center; gap: 6px; }
 
+.score-panel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 0;
+  border: 14px solid transparent;
+  border-image: url("assets/img/ui/slab.png") 42 fill / 14px stretch;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .55));
+}
+
+.score-panel img { width: 30px; height: 56px; object-fit: contain; margin: -16px 0 -14px -6px; filter: drop-shadow(0 0 6px rgba(186, 244, 90, .5)); }
+.score-panel strong { display: block; font-family: var(--font-chunky); font-weight: 400; font-size: 25px; line-height: 1; text-shadow: var(--ink-outline); }
+.score-panel span { display: block; font-family: var(--font-chunky); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--soul); text-shadow: var(--ink-outline); }
+
+.task-panel { max-width: 260px; }
+.task-panel img { width: 30px; height: 36px; margin: -8px 2px -8px -4px; filter: none; }
+.task-panel strong { font-family: var(--font-ui); font-size: 14px; line-height: 1.2; font-weight: 800; }
+.task-panel span { color: var(--amber); }
+
+.task-step {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px; height: 40px;
+  background: url("assets/img/ui/medallion.png") center / contain no-repeat;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .55));
+  font-weight: 900;
+  color: var(--soul);
+}
+
+.task-step img { width: 24px; height: 26px; object-fit: contain; opacity: .45; filter: grayscale(.7); }
+.task-step.done img { opacity: 1; filter: none; }
+.task-step.done { filter: drop-shadow(0 0 4px rgba(186, 244, 90, .7)) drop-shadow(0 2px 0 rgba(0, 0, 0, .55)); }
+.task-step.done::after {
+  content: '✓';
+  position: absolute;
+  right: -5px; bottom: -6px;
+  font-size: 13px;
+  text-shadow: 0 1px 0 var(--ink), 0 0 2px var(--ink);
+}
+
+.heart-row { display: flex; gap: 2px; }
+.heart-row img { width: 28px; height: 25px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .5)); }
+
+.wave-box { text-align: right; line-height: 1; }
+.wave-box .lbl { display: block; font-family: var(--font-chunky); font-size: 14px; letter-spacing: 1px; color: var(--text); text-shadow: var(--ink-outline); }
+.wave-box strong { display: block; font-family: var(--font-chunky); font-weight: 400; font-size: 30px; color: var(--amber); text-shadow: var(--ink-outline); }
+
+/* Small stone tag for counters (gate breaches, undead left). */
 .hud-chip {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 9px;
-  border-radius: 10px;
-  border: 2px solid var(--ink);
-  background: #2f2639;
-  font-weight: 800;
-  font-size: 14px;
+  min-height: 34px;
+  padding: 0 4px 1px;
+  border: 10px solid transparent;
+  border-image: url("assets/img/ui/pill.png") 30 fill / 10px stretch;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .55));
+  font-family: var(--font-chunky);
+  font-size: 16px;
+  text-shadow: var(--ink-outline);
   white-space: nowrap;
 }
 
-.hud-chip .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); }
+.hud-chip .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); }
 .hud-chip.score { color: var(--amber); }
 .hud-chip.souls { color: var(--soul); }
-.hud-chip.breach.warn { color: var(--danger); border-color: var(--danger); }
+.hud-chip.breach.warn { color: var(--danger); }
 .hearts { display: flex; gap: 2px; font-size: 18px; line-height: 1; }
 .heart.lost { opacity: .25; filter: grayscale(1); }
 
@@ -448,12 +527,24 @@ button { font: inherit; }
 }
 
 .hud-sub {
-  padding: 4px 12px;
-  font-size: 13px;
-  background: #1a1124;
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(var(--hud-bottom, 108px) + var(--safe-t));
+  max-width: calc(100% - 32px);
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: rgba(20, 11, 32, .85);
+  box-shadow: inset 0 0 0 2px #4b4259;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--text-dim);
-  border-bottom: 2px solid var(--ink);
-  min-height: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 .viewport {
@@ -471,21 +562,28 @@ button { font: inherit; }
   display: block;
 }
 
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 75% 60% at 50% 50%, rgba(12, 4, 24, 0) 45%, rgba(12, 4, 24, .6) 100%);
+}
+
 .toast {
   position: absolute;
   left: 50%;
-  top: 18%;
+  top: 20%;
   transform: translateX(-50%);
-  padding: 8px 18px;
-  border-radius: 12px;
-  border: 3px solid var(--ink);
-  background: rgba(37, 22, 56, .92);
-  font-weight: 900;
-  font-size: 20px;
-  letter-spacing: .5px;
+  padding: 0 10px 2px;
+  border: 20px solid transparent;
+  border-image: url("assets/img/ui/slab.png") 42 fill / 20px stretch;
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .55));
+  font-family: var(--font-chunky);
+  font-size: 24px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--soul);
-  text-shadow: 0 2px 0 var(--ink);
+  text-shadow: var(--ink-outline);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
@@ -495,50 +593,44 @@ button { font: inherit; }
 .toast.show { opacity: 1; }
 
 .controls {
-  position: relative;
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 2;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 8px 18px calc(8px + var(--safe-b));
-  background: linear-gradient(180deg, #1d1329, #140c1d);
-  border-top: 3px solid var(--ink);
+  align-items: flex-end;
+  padding: 24px 18px calc(14px + var(--safe-b));
+  background: linear-gradient(0deg, rgba(14, 7, 24, .7) 0%, rgba(14, 7, 24, .35) 65%, rgba(14, 7, 24, 0) 100%);
   touch-action: none;
   user-select: none;
+  pointer-events: none;
 }
+
+.controls .joystick, .controls .action-wrap { pointer-events: auto; }
 
 .joystick {
   position: relative;
-  width: 124px;
-  height: 124px;
+  width: 128px;
+  height: 128px;
   touch-action: none;
 }
 
+/* Stone disc with carved direction arrows; the skull knob rides on top. */
 .joystick-base {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  border: 4px solid var(--ink);
-  background: radial-gradient(circle, #3b3446 0%, #2a2333 70%);
-  box-shadow: inset 0 0 0 5px #4d4559, 0 4px 0 #000;
+  background: url("assets/img/ui/joystick.png") center / contain no-repeat;
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .55));
 }
-
-.arrow {
-  position: absolute;
-  width: 0; height: 0;
-  border: 7px solid transparent;
-}
-.arrow.up { top: 9px; left: 50%; margin-left: -7px; border-bottom-color: var(--lavender); }
-.arrow.down { bottom: 9px; left: 50%; margin-left: -7px; border-top-color: var(--lavender); }
-.arrow.left { left: 9px; top: 50%; margin-top: -7px; border-right-color: var(--lavender); }
-.arrow.right { right: 9px; top: 50%; margin-top: -7px; border-left-color: var(--lavender); }
 
 .joystick-knob {
   position: absolute;
   left: 50%; top: 50%;
-  width: 64px; height: 64px;
-  margin: -32px 0 0 -32px;
+  width: 62px; height: 62px;
+  margin: -31px 0 0 -31px;
   pointer-events: none;
   will-change: transform;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .5));
 }
 
 .action-wrap {
@@ -549,12 +641,12 @@ button { font: inherit; }
 }
 
 .action-btn {
-  width: 84px;
-  height: 84px;
+  width: 92px;
+  height: 92px;
+  border: 0;
   border-radius: 50%;
-  border: 4px solid var(--ink);
-  background: radial-gradient(circle at 50% 38%, #8ad23c, #3f7a1d 72%);
-  box-shadow: inset 0 0 0 5px #2a4d16, inset 0 -6px 0 rgba(0, 0, 0, .25), 0 4px 0 #000;
+  background: url("assets/img/ui/action.png") center / contain no-repeat;
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .55)) drop-shadow(0 0 10px rgba(186, 244, 90, .35));
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -562,17 +654,18 @@ button { font: inherit; }
   padding: 0;
 }
 
-.action-btn.pressed { transform: translateY(3px); box-shadow: inset 0 0 0 5px #2a4d16, 0 1px 0 #000; }
-.action-btn.cooldown { filter: saturate(.5) brightness(.8); }
-.action-btn[aria-disabled="true"] { background: radial-gradient(circle at 50% 38%, #5d566a, #3a3346 72%); box-shadow: inset 0 0 0 5px #2a2333, 0 4px 0 #000; }
+.action-btn.pressed { transform: translateY(3px); filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .55)) brightness(.92); }
+.action-btn.cooldown { filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .55)) saturate(.45) brightness(.8); }
+.action-btn[aria-disabled="true"] { filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .55)) grayscale(1) brightness(.6); }
 
-.action-icon svg { width: 46px; height: 46px; display: block; }
+.action-icon svg { width: 48px; height: 48px; display: block; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .35)); }
 
 .action-label {
-  font-weight: 800;
-  font-size: 13px;
+  font-family: var(--font-chunky);
+  font-size: 15px;
   text-transform: uppercase;
   letter-spacing: .6px;
+  text-shadow: var(--ink-outline);
   max-width: 150px;
   text-align: center;
   line-height: 1.2;
@@ -583,21 +676,7 @@ button { font: inherit; }
 
 .screen-results { justify-content: center; gap: 18px; }
 
-.results-panel { padding-top: 34px; }
-
-.panel-emblem {
-  position: absolute;
-  top: -26px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 56px; height: 56px;
-  display: grid; place-items: center;
-  font-size: 32px;
-  border-radius: 50%;
-  border: 4px solid var(--ink);
-  background: #d8cfc0;
-  color: var(--ink);
-}
+.results-panel { margin-top: 30px; }
 
 .results-reason { text-align: center; margin: 0 0 12px; color: var(--text-dim); }
 
@@ -608,15 +687,19 @@ button { font: inherit; }
   font-size: 15px;
 }
 
+/* Recessed dark stone rows, like the reference's Points Earned board. */
 .results-table td {
-  padding: 9px 12px;
-  background: #262030;
-  border-top: 2px solid var(--ink);
-  border-bottom: 2px solid var(--ink);
+  padding: 8px 12px;
+  background: #1f1a28;
+  border-top: 2px solid #120d18;
+  border-bottom: 2px solid #4b4259;
+  font-family: var(--font-chunky);
+  text-shadow: var(--ink-outline);
 }
 
-.results-table td:first-child { border-left: 2px solid var(--ink); border-radius: 8px 0 0 8px; font-weight: 700; text-transform: uppercase; font-size: 13px; letter-spacing: .5px; }
-.results-table td:last-child { border-right: 2px solid var(--ink); border-radius: 0 8px 8px 0; text-align: right; font-weight: 800; }
+.results-table td:first-child { border-left: 2px solid #120d18; border-radius: 8px 0 0 8px; text-transform: uppercase; font-size: 15px; letter-spacing: .5px; }
+.results-table td:last-child { border-right: 2px solid #4b4259; border-radius: 0 8px 8px 0; text-align: right; font-size: 17px; }
+.results-table .row-icon { width: 22px; height: 22px; object-fit: contain; vertical-align: -5px; margin-right: 8px; }
 
 .results-total {
   display: flex;
@@ -624,17 +707,18 @@ button { font: inherit; }
   justify-content: center;
   gap: 12px;
   margin-top: 8px;
-  padding: 10px;
+  padding: 8px 10px;
   border-radius: 12px;
-  border: 3px solid var(--ink);
-  background: #262030;
+  background: #1f1a28;
+  border-top: 2px solid #120d18;
+  border-bottom: 2px solid #4b4259;
 }
 
-.results-total img { width: 44px; height: 60px; object-fit: contain; }
-.results-total span { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--soul); font-weight: 800; }
-.results-total strong { display: block; font-size: 34px; color: var(--soul); line-height: 1.1; }
+.results-total img { width: 46px; height: 64px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(186, 244, 90, .5)); }
+.results-total span { display: block; font-family: var(--font-chunky); font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--soul); text-shadow: var(--ink-outline); }
+.results-total strong { display: block; font-family: var(--font-chunky); font-weight: 400; font-size: 40px; color: var(--soul); line-height: 1.05; text-shadow: var(--ink-outline); }
 
-.results-best { text-align: center; color: var(--amber); font-weight: 700; margin: 10px 0 0; }
+.results-best { text-align: center; color: var(--amber); font-family: var(--font-chunky); font-size: 17px; text-shadow: var(--ink-outline); margin: 10px 0 0; }
 .results-best:empty { display: none; }
 .results-ending { text-align: center; font-style: italic; line-height: 1.45; margin: 10px 0 0; }
 .results-ending:empty { display: none; }
@@ -669,15 +753,55 @@ button { font: inherit; }
 .setting label { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 6px; }
 .setting.check { display: flex; align-items: center; gap: 10px; }
 .setting.check label { margin: 0; }
-.setting input[type="range"] { width: 100%; height: 32px; accent-color: var(--soul); }
-.setting input[type="checkbox"] { width: 26px; height: 26px; accent-color: var(--soul); }
+.setting label { font-family: var(--font-chunky); font-weight: 400; font-size: 17px; letter-spacing: .4px; text-shadow: var(--ink-outline); }
+.setting output { color: var(--soul); }
+
+/* Carved groove with a lime gem thumb. */
+.setting input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 32px;
+  background: transparent;
+}
+.setting input[type="range"]::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: linear-gradient(180deg, #120d18, #2a2333);
+  box-shadow: 0 2px 0 #4b4259;
+}
+.setting input[type="range"]::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: linear-gradient(180deg, #120d18, #2a2333);
+}
+.setting input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 28px; height: 28px;
+  margin-top: -10px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: radial-gradient(circle at 40% 35%, #e6ffb0, var(--soul) 45%, #5f9a22);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .5);
+}
+.setting input[type="range"]::-moz-range-thumb {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: radial-gradient(circle at 40% 35%, #e6ffb0, var(--soul) 45%, #5f9a22);
+}
+
+.setting input[type="checkbox"] { width: 28px; height: 28px; accent-color: var(--soul); }
 .setting select {
   width: 100%;
-  min-height: 44px;
-  padding: 8px;
-  border-radius: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: 10px;
   border: 2px solid var(--ink);
-  background: #262030;
+  background: linear-gradient(180deg, #2a2333, #1f1a28);
+  box-shadow: inset 0 2px 0 #120d18, 0 2px 0 #4b4259;
   color: var(--text);
   font: inherit;
 }

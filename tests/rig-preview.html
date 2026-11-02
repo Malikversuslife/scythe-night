@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Rig preview</title>
+  <style>
+    body { margin: 0; background: #2d2440; color: #eee; font: 13px system-ui; }
+    canvas { display: block; width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <canvas id="c" width="1200" height="900"></canvas>
+  <script type="module">
+    import { RIGS, RIG_IMAGES, drawRig, pose } from '../src/rig.js';
+    const images = {};
+    await Promise.all(Object.entries(RIG_IMAGES).map(([k, f]) => new Promise((res) => {
+      const i = new Image(); i.onload = () => { images[k] = i; res(); }; i.src = `../assets/img/v2/${f}.png`;
+    })));
+    const ctx = document.getElementById('c').getContext('2d');
+    const params = new URLSearchParams(location.search);
+    const frozen = params.has('t') ? +params.get('t') : null;
+    const poses = [
+      ['idle', (t) => pose({ t, bob: Math.sin(t * 2) * 3 })],
+      ['walk', (t) => pose({ t, walk: Math.sin(t * 9), bob: Math.abs(Math.sin(t * 9)) * 10 })],
+      ['wind-up', (t) => pose({ t, swing: 2.4, slashLean: -1 })],
+      ['slash', (t) => pose({ t, swing: -1.0, slashLean: 1 })],
+      ['hurt / alert', (t) => pose({ t, hurt: 1, alert: 1 })],
+    ];
+    function frame(now) {
+      const t = frozen ?? now / 1000;
+      ctx.clearRect(0, 0, 1200, 900);
+      ['reaper', 'zombie', 'zgirl', 'mara'].forEach((name, row) => {
+        poses.forEach(([label, fn], col) => {
+          const x = 120 + col * 220, y = 230 + row * 225;
+          ctx.fillStyle = 'rgba(0,0,0,.35)';
+          ctx.beginPath(); ctx.ellipse(x, y, 50, 14, 0, 0, Math.PI * 2); ctx.fill();
+          drawRig(ctx, images, RIGS[name], fn(t), x, y, 190);
+          ctx.fillStyle = '#eee'; ctx.fillText(`${name} ${label}`, x - 40, y + 26);
+        });
+      });
+      if (frozen === null) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
