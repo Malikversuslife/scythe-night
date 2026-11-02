@@ -7,7 +7,12 @@ const MOVE_KEYS = {
   KeyD: [1, 0], ArrowRight: [1, 0],
 };
 
-export function createInput({ joystick, knob, actionBtn, actionKeys, onPause, isActive }) {
+// Capture can throw if the pointer is already gone; input must keep working regardless.
+function capture(el, id) {
+  try { el.setPointerCapture(id); } catch { /* pointer no longer active */ }
+}
+
+export function createInput({ joystick, knob, actionBtn, surface, actionKeys, onPause, isActive }) {
   const held = new Set();
   let stick = { x: 0, y: 0 };
   let stickPointer = null;
@@ -56,7 +61,7 @@ export function createInput({ joystick, knob, actionBtn, actionKeys, onPause, is
     if (!isActive() || stickPointer !== null) return;
     e.preventDefault();
     stickPointer = e.pointerId;
-    joystick.setPointerCapture(e.pointerId);
+    capture(joystick, e.pointerId);
     stickFrom(e);
   });
   joystick.addEventListener('pointermove', (e) => { if (e.pointerId === stickPointer) stickFrom(e); });
@@ -69,7 +74,7 @@ export function createInput({ joystick, knob, actionBtn, actionKeys, onPause, is
     if (!isActive() || actionPointer !== null) return;
     e.preventDefault();
     actionPointer = e.pointerId;
-    actionBtn.setPointerCapture(e.pointerId);
+    capture(actionBtn, e.pointerId);
     actionBtn.classList.add('pressed');
     actionQueued = true;
     actionHeld = true;
@@ -83,6 +88,17 @@ export function createInput({ joystick, knob, actionBtn, actionKeys, onPause, is
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) actionBtn.addEventListener(ev, releaseAction);
   // Keyboard Enter/Space on the focused button produces a click with detail 0.
   actionBtn.addEventListener('click', (e) => { if (e.detail === 0 && isActive()) actionQueued = true; });
+
+  // Joystick + action at once is two fingers, which mobile browsers read as a pinch,
+  // and fast taps read as double-tap zoom. Cancel the browser's own touch handling over
+  // the play area and controls (pointer events still arrive); HUD buttons keep theirs.
+  const isGameTouch = (e) => !e.target.closest('.hud, .overlay');
+  const block = (e) => { if (isGameTouch(e)) e.preventDefault(); };
+  for (const ev of ['touchstart', 'touchmove', 'touchend']) surface.addEventListener(ev, block, { passive: false });
+  // Safari's proprietary pinch events.
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
+    document.addEventListener(ev, (e) => { if (isActive() || surface.contains(e.target)) e.preventDefault(); }, { passive: false });
+  }
 
   return {
     // Returns normalized movement and consumes a queued action press.

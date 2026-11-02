@@ -312,6 +312,7 @@ const input = createInput({
   joystick: $('joystick'),
   knob: $('joystick-knob'),
   actionBtn: $('btn-action'),
+  surface: $('screen-game'),
   actionKeys: () => CAMPAIGNS[campaign].actionKeys,
   onPause: () => pause(),
   isActive: () => state === 'playing' && overlayStack.length === 0,

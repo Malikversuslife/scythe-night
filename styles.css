@@ -30,6 +30,7 @@
 html, body {
   margin: 0;
   height: 100%;
+  touch-action: manipulation; /* no double-tap zoom anywhere; menus still scroll */
   background: #120a1c;
   color: var(--text);
   font-family: var(--font-ui);
@@ -415,6 +416,10 @@ button { font: inherit; }
   overflow: hidden;
   background: var(--ink);
   display: block;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .screen-game .viewport { position: absolute; inset: 0; }
