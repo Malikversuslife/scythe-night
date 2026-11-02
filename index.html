@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#251638">
+  <title>Scythe Night</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Butcherman&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app">
+
+    <!-- Boot -->
+    <section id="screen-boot" class="screen screen-boot" aria-labelledby="boot-title">
+      <h1 id="boot-title" class="display-title small">Scythe Night</h1>
+      <p id="boot-status" class="boot-status" role="status">Loading the graveyard…</p>
+      <button id="boot-retry" class="stone-btn" type="button" hidden>Retry</button>
+    </section>
+
+    <!-- Splash -->
+    <section id="screen-splash" class="screen screen-splash bg-cemetery" aria-labelledby="splash-title" hidden>
+      <div class="splash-stage">
+        <img class="splash-reaper" src="assets/img/splash-reaper.png" alt="" draggable="false">
+        <h1 id="splash-title" class="splash-logo">
+          <img src="assets/img/title-logo.webp" alt="Scythe Night" draggable="false">
+        </h1>
+      </div>
+      <div class="splash-actions">
+        <button id="btn-play" class="banner-btn" type="button">
+          <img src="assets/img/banner-tap.png" alt="" draggable="false">
+          <span class="visually-hidden">Play</span>
+        </button>
+        <div class="splash-row">
+          <button id="btn-splash-settings" class="stone-btn small" type="button">⚙ Settings</button>
+          <button id="btn-splash-sound" class="stone-btn small" type="button" aria-pressed="false">🔊 Sound on</button>
+        </div>
+        <p class="version">V-0.5.0 // SECTOR 7</p>
+      </div>
+    </section>
+
+    <!-- Story select -->
+    <section id="screen-select" class="screen screen-select bg-cemetery" aria-labelledby="select-title" hidden>
+      <header class="topbar">
+        <div class="best-pill" aria-label="Keeper best score">
+          <img src="assets/img/sprite-soul.png" alt="">
+          <div><strong id="select-best">0</strong><span>Best</span></div>
+        </div>
+        <div class="topbar-buttons">
+          <button id="btn-select-back" class="round-btn" type="button" aria-label="Back to title">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <button id="btn-select-settings" class="round-btn" type="button" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+          </button>
+        </div>
+      </header>
+      <h1 id="select-title" class="select-banner">
+        <img src="assets/img/banner-select.png" alt="Select your story" draggable="false">
+      </h1>
+      <div class="card-list">
+        <button class="story-card" type="button" data-campaign="keeper" aria-describedby="card-keeper-desc">
+          <img src="assets/img/card-keeper.webp" alt="Story Mode I: The Cemetery Keeper" draggable="false">
+          <span class="card-badge" data-badge="keeper" hidden>✓ Completed</span>
+        </button>
+        <p id="card-keeper-desc" class="card-caption">
+          <strong>Play as Pip the reaper.</strong> Take the night shift. Cut through the restless dead, free their souls, and keep the city gate sealed.
+        </p>
+        <button class="story-card" type="button" data-campaign="survivor" aria-describedby="card-survivor-desc">
+          <img src="assets/img/card-survivor.webp" alt="Story Mode II: The Last Survivor" draggable="false">
+          <span class="card-badge" data-badge="survivor" hidden>✓ Completed</span>
+        </button>
+        <p id="card-survivor-desc" class="card-caption">
+          <strong>Play as Mara the courier.</strong> The city has fallen silent. Avoid the dead, restore the refuge route, and reach safety before they catch you.
+        </p>
+      </div>
+    </section>
+
+    <!-- Intro / how to play -->
+    <section id="screen-intro" class="screen screen-intro bg-cemetery" aria-labelledby="intro-title" hidden>
+      <div class="stone-panel intro-panel">
+        <img id="intro-sprite" class="intro-sprite" src="" alt="">
+        <h1 id="intro-title" class="display-title"></h1>
+        <p id="intro-story" class="intro-story"></p>
+        <h2 class="panel-heading">How to play</h2>
+        <ul id="intro-rules" class="rule-list"></ul>
+        <h2 class="panel-heading">Controls</h2>
+        <ul id="intro-controls" class="rule-list compact"></ul>
+        <p class="fine-print">Closing or refreshing the page ends the current run. Settings and records are kept.</p>
+        <div class="panel-actions">
+          <button id="btn-intro-back" class="stone-btn" type="button">◀ Back</button>
+          <button id="btn-intro-start" class="stone-btn primary" type="button">▶ Start</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gameplay -->
+    <section id="screen-game" class="screen screen-game" aria-label="Game" hidden>
+      <header class="hud" id="hud">
+        <div class="hud-left" id="hud-left"></div>
+        <div class="hud-right">
+          <div class="hud-stats" id="hud-stats"></div>
+          <button id="btn-pause" class="round-btn img-btn" type="button" aria-label="Pause (Escape)">
+            <img src="assets/img/btn-pause.png" alt="">
+          </button>
+        </div>
+      </header>
+      <div class="hud-sub" id="hud-sub" aria-hidden="true"></div>
+      <div class="viewport" id="viewport">
+        <canvas id="game-canvas" aria-describedby="canvas-desc"></canvas>
+        <p id="canvas-desc" class="visually-hidden">Top-down game view. Current objective and status are announced in the status area.</p>
+        <div class="toast" id="toast" aria-hidden="true"></div>
+      </div>
+      <div class="controls" id="controls">
+        <div class="joystick" id="joystick" aria-hidden="true">
+          <div class="joystick-base"><span class="arrow up"></span><span class="arrow down"></span><span class="arrow left"></span><span class="arrow right"></span></div>
+          <img class="joystick-knob" id="joystick-knob" src="assets/img/btn-skull.png" alt="" draggable="false">
+        </div>
+        <div class="action-wrap">
+          <button id="btn-action" class="action-btn" type="button">
+            <span class="action-icon" id="action-icon" aria-hidden="true"></span>
+          </button>
+          <span class="action-label" id="action-label">Slash</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section id="screen-results" class="screen screen-results bg-cemetery dim" aria-labelledby="results-title" hidden>
+      <div class="stone-panel results-panel">
+        <div class="panel-emblem" aria-hidden="true">☠</div>
+        <h1 id="results-title" class="display-title"></h1>
+        <p id="results-reason" class="results-reason"></p>
+        <table class="results-table" id="results-table"><tbody></tbody></table>
+        <div class="results-total" id="results-total" hidden>
+          <img src="assets/img/sprite-soul.png" alt="">
+          <div><span id="results-total-label">Total score</span><strong id="results-total-value">0</strong></div>
+        </div>
+        <p id="results-best" class="results-best"></p>
+        <p id="results-ending" class="results-ending"></p>
+      </div>
+      <div class="results-actions">
+        <button id="btn-retry" class="stone-btn primary" type="button">⟳ Retry</button>
+        <button id="btn-results-select" class="stone-btn" type="button">☰ Story select</button>
+      </div>
+    </section>
+
+    <!-- Pause overlay -->
+    <div id="overlay-pause" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+      <div class="stone-panel overlay-panel">
+        <h2 id="pause-title" class="display-title">Paused</h2>
+        <div class="menu-stack">
+          <button id="btn-resume" class="stone-btn primary" type="button">▶ Resume</button>
+          <button id="btn-restart" class="stone-btn" type="button">⟳ Restart</button>
+          <button id="btn-pause-controls" class="stone-btn" type="button">✋ Controls</button>
+          <button id="btn-pause-settings" class="stone-btn" type="button">⚙ Settings</button>
+          <button id="btn-pause-select" class="stone-btn" type="button">☰ Story select</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls card overlay -->
+    <div id="overlay-controls" class="overlay" role="dialog" aria-modal="true" aria-labelledby="controls-title" hidden>
+      <div class="stone-panel overlay-panel">
+        <h2 id="controls-title" class="display-title">Controls</h2>
+        <ul id="controls-list" class="rule-list compact"></ul>
+        <div class="menu-stack">
+          <button id="btn-controls-close" class="stone-btn primary" type="button">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm overlay -->
+    <div id="overlay-confirm" class="overlay" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text" hidden>
+      <div class="stone-panel overlay-panel">
+        <h2 id="confirm-title" class="display-title small">Are you sure?</h2>
+        <p id="confirm-text"></p>
+        <div class="panel-actions">
+          <button id="btn-confirm-no" class="stone-btn" type="button">Cancel</button>
+          <button id="btn-confirm-yes" class="stone-btn danger" type="button">Yes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings overlay -->
+    <div id="overlay-settings" class="overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+      <div class="stone-panel overlay-panel settings-panel">
+        <h2 id="settings-title" class="display-title">Settings</h2>
+        <div class="setting">
+          <label for="set-music">Music volume <output id="out-music" for="set-music"></output></label>
+          <input id="set-music" type="range" min="0" max="100" step="5">
+        </div>
+        <div class="setting">
+          <label for="set-sfx">Effects volume <output id="out-sfx" for="set-sfx"></output></label>
+          <input id="set-sfx" type="range" min="0" max="100" step="5">
+        </div>
+        <div class="setting check">
+          <input id="set-mute" type="checkbox">
+          <label for="set-mute">Mute all sound</label>
+        </div>
+        <div class="setting">
+          <label for="set-motion">Reduced motion</label>
+          <select id="set-motion">
+            <option value="system">Follow device setting</option>
+            <option value="on">On (less movement)</option>
+            <option value="off">Off (full animation)</option>
+          </select>
+        </div>
+        <p class="fine-print">Keyboard: move with WASD or arrow keys. Slash with Space or J. Interact with E or Space. Pause with Escape or P.</p>
+        <p class="fine-print" id="storage-note" hidden>Progress will not be saved on this device.</p>
+        <div class="menu-stack">
+          <button id="btn-settings-close" class="stone-btn primary" type="button">Done</button>
+          <button id="btn-reset-data" class="stone-btn danger small" type="button">Reset saved data</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="live" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+    <div id="live-assertive" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
