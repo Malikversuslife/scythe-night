@@ -1,32 +1,29 @@
-// Browser side of the shared leaderboard.
-const URL_BASE = '/api/scores';
+// Browser side of the shared leaderboard: two public Supabase database functions.
+// The publishable key is meant to be public. The functions in supabase/leaderboard.sql
+// do the checking, and nobody can touch the table directly.
+const API = 'https://ieijitlqbyiuiwqjxavt.supabase.co/rest/v1/rpc';
+const KEY = 'sb_publishable_-llQKA4a_CUu7THlYelQnA_ahDbDqGV';
+const UNAVAILABLE = 'The leaderboard is unavailable right now.';
 
-async function read(res) {
-  let data = null;
-  try { data = await res.json(); } catch { /* not JSON: treated as unavailable below */ }
-  if (res.ok && data) return { ok: true, ...data };
-  // 4xx messages are written for the player; anything else just means we can't reach it.
-  return { ok: false, error: res.status >= 400 && res.status < 500 && data?.error ? data.error : 'The leaderboard is unavailable right now.' };
-}
-
-const offline = () => ({ ok: false, error: 'The leaderboard is unavailable right now.' });
-
-export async function fetchBoard(playerId, fetchFn = fetch) {
+async function call(fn, args, fetchFn) {
   try {
-    return await read(await fetchFn(`${URL_BASE}?player=${encodeURIComponent(playerId)}`));
-  } catch {
-    return offline();
-  }
-}
-
-export async function submitScore(playerId, name, run, fetchFn = fetch) {
-  try {
-    return await read(await fetchFn(URL_BASE, {
+    const res = await fetchFn(`${API}/${fn}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId, name, run }),
-    }));
+      headers: { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    const data = await res.json();
+    if (!res.ok || !data) return { ok: false, error: UNAVAILABLE };
+    // A refusal from submit_score is written for the player.
+    if (data.error) return { ok: false, error: data.error };
+    return { ok: true, ...data };
   } catch {
-    return offline();
+    return { ok: false, error: UNAVAILABLE };
   }
 }
+
+export const fetchBoard = (playerId, fetchFn = fetch) =>
+  call('get_leaderboard', { p_player: playerId }, fetchFn);
+
+export const submitScore = (playerId, name, run, fetchFn = fetch) =>
+  call('submit_score', { p_player: playerId, p_name: name, p_run: run }, fetchFn);

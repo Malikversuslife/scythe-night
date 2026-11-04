@@ -3,8 +3,7 @@ import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, distraction
 import { distanceField, isSolid, lineOfSight, moveCircle } from '../src/world.js';
 import { sanitize, createStore, defaultSave } from '../src/storage.js';
 import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS } from '../src/catalog.js';
-import { cleanName, checkRun } from '../src/leaderboard-rules.mjs';
-import { getBoard, postScore } from '../api/_scores.mjs';
+import { cleanName } from '../src/leaderboard-rules.mjs';
 import { fetchBoard, submitScore } from '../src/leaderboard.js';
 import { boardRowsHtml } from '../src/screens.js';
 import {
@@ -909,27 +908,6 @@ test('Skills: neither changes the core loss rules', () => {
 // ---------------- Shared leaderboard ----------------
 
 const ID = 'abcdef12-3456-7890-abcd-ef1234567890';
-const winRun = (over = {}) => ({ score: 1380, time: 90, defeated: 18, souls: 18, seals: 3, health: 3, breaches: 0, result: 'victory', ...over });
-
-// Tiny stand-in for D1 that follows the same SQL intent.
-function fakeDb() {
-  const rows = new Map();
-  const sorted = () => [...rows.values()].sort((a, b) => b.score - a.score || a.time_s - b.time_s || a.created_at - b.created_at);
-  const db = async (sql, p) => {
-    if (sql.startsWith('INSERT')) {
-      const [player_id, name, score, time_s, created_at] = p;
-      const old = rows.get(player_id);
-      if (!old || score > old.score || (score === old.score && time_s < old.time_s)) rows.set(player_id, { player_id, name, score, time_s, created_at });
-      return [];
-    }
-    if (sql.includes('COUNT')) return [{ rank: 1 + sorted().filter((r) => r.score > p[0] || (r.score === p[1] && r.time_s < p[2])).length }];
-    if (sql.includes('WHERE player_id')) return rows.has(p[0]) ? [rows.get(p[0])] : [];
-    return sorted().slice(0, 10);
-  };
-  db.rows = rows;
-  return db;
-}
-
 test('Leaderboard names: valid names pass; long, odd and rude ones are refused', () => {
   eq(cleanName('  Mossy  Pip ').name, 'Mossy Pip');
   eq(cleanName('Pip_99-x').ok, true);
@@ -943,50 +921,14 @@ test('Leaderboard names: valid names pass; long, odd and rude ones are refused',
   eq(cleanName('big cock').ok, false);
 });
 
-test('Leaderboard runs: a real result passes; forged or impossible ones are refused', () => {
-  eq(checkRun(winRun()), null);
-  eq(checkRun({ score: 35, time: 20, defeated: 1, souls: 1, seals: 0, health: 0, breaches: 1, result: 'defeat' }), null);
-  assert(checkRun(winRun({ score: 999999 })), 'made-up score');
-  assert(checkRun(winRun({ score: 1400, defeated: 20, souls: 18 })), 'more undead than exist');
-  assert(checkRun(winRun({ souls: 17 })), 'totals do not add up');
-  assert(checkRun(winRun({ seals: 2, score: 1280 })), 'a win needs every seal');
-  assert(checkRun(winRun({ time: 5 })), 'faster than undead can rise');
-  assert(checkRun(winRun({ health: 0, score: 1080 })), 'cannot win with no health');
-  assert(checkRun(winRun({ score: 1380.5 })), 'whole numbers only');
-  assert(checkRun(null));
-});
-
-test('Leaderboard rules: the check accepts a score the game really produced', () => {
+test('Leaderboard scoring: the game still scores runs the way supabase/leaderboard.sql checks them', () => {
   const run = createKeeperRun(55);
   playPerfectKeeper(run);
-  eq(checkRun({ score: run.score, time: run.time, defeated: run.stats.defeated, souls: run.stats.souls, seals: run.stats.seals, health: run.health, breaches: run.breaches, result: run.outcome.result }), null);
-});
-
-test('Leaderboard API: keeps only each player\'s best, ranks ties by time, returns a top 10', async () => {
-  {
-    const db = fakeDb();
-    const post = (id, run, name = 'Pip') => postScore(db, { playerId: `player-${id}-000000000000`, name, run }, 1000);
-    for (let i = 0; i < 12; i++) await post(i, winRun({ time: 60 + i }));
-    const low = { score: 35, time: 20, defeated: 1, souls: 1, seals: 0, health: 0, breaches: 1, result: 'defeat' };
-    const after = await post(0, low);
-    eq(after.body.you.score, 1380, 'a worse run does not replace the best');
-    eq(db.rows.size, 12, 'one row per player');
-    const board = await getBoard(db, 'player-11-000000000000');
-    eq(board.body.top.length, 10);
-    eq(board.body.top[0].time, 60, 'ties go to the faster run');
-    eq(board.body.you.rank, 12, 'your rank shows even outside the top 10');
-    assert(!JSON.stringify(board.body.top).includes('player-'), 'device ids stay private');
-  }
-});
-
-test('Leaderboard API: bad requests are refused and save nothing', async () => {
-  const db = fakeDb();
-  eq((await postScore(db, { playerId: 'x', name: 'Pip', run: winRun() }, 1)).status, 400);
-  eq((await postScore(db, { playerId: ID, name: 'sh1t', run: winRun() }, 1)).status, 400);
-  eq((await postScore(db, { playerId: ID, name: 'Pip', run: winRun({ score: 5000 }) }, 1)).status, 422);
-  eq((await postScore(db, null, 1)).status, 400);
-  eq(db.rows.size, 0);
-  eq((await postScore(db, { playerId: ID, name: 'Pip', run: winRun() }, 1)).status, 200);
+  const { defeated, souls, seals } = run.stats;
+  eq(run.outcome.result, 'victory');
+  eq(run.score, defeated * 10 + souls * 25 + seals * 100 + run.health * 100 + (3 - run.breaches) * 50, 'if this fails, update submit_score too');
+  assert(defeated <= 18, 'the database refuses more than 18 undead');
+  assert(run.time >= (defeated - 1) * 1.5, 'the database refuses faster runs');
 });
 
 test('Leaderboard client: an outage or missing service reports honestly, and names are escaped', async () => {
@@ -994,7 +936,7 @@ test('Leaderboard client: an outage or missing service reports honestly, and nam
   eq(down.ok, false);
   const missing = await fetchBoard(ID, async () => new Response('<!doctype html>', { status: 404 }));
   eq(missing.ok, false);
-  const refused = await submitScore(ID, 'Pip', {}, async () => new Response(JSON.stringify({ error: 'Too fast.' }), { status: 422 }));
+  const refused = await submitScore(ID, 'Pip', {}, async () => new Response(JSON.stringify({ error: 'Too fast.' })));
   eq(refused.error, 'Too fast.');
   const html = boardRowsHtml({ top: [{ rank: 1, name: '<img onerror=x>', score: 10 }], you: null });
   assert(!html.includes('<img'), 'stored names are not trusted as HTML');

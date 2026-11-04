@@ -17,17 +17,14 @@ python -m http.server 5173
 
 Then open <http://localhost:5173>. Logic tests run at <http://localhost:5173/tests/>. With `?debug` in the game's URL, `await (await import('/tests/ui-audit.js')).audit()` checks every screen's layout at the current size.
 
-## Leaderboard setup
+## Leaderboard
 
-The top 10 is a Vercel function (`api/scores.mjs`) in front of a Cloudflare D1 database named `scythe-night`. Its `scores` table keeps one row per device: a random id, a public name, and that player's best score and time. It needs three environment variables on the Vercel project:
+The top 10 lives in a free Supabase project (`ieijitlqbyiuiwqjxavt`). There is nothing to configure: the game calls two public database functions, `get_leaderboard` and `submit_score`, using Supabase's publishable key, which is safe to ship in the page. The table itself is closed to the public, so device ids stay private. Its definition is in `supabase/leaderboard.sql`.
 
-| Variable | Value |
-| --- | --- |
-| `CF_ACCOUNT_ID` | Your Cloudflare account ID |
-| `CF_D1_DATABASE_ID` | `4a40b965-dc22-4bf8-ac6d-245ad2028697` |
-| `CF_API_TOKEN` | A Cloudflare API token with **D1: Edit** permission only (keep it secret) |
+The table keeps one row per device: a random id, a public name, and that player's best score and time. The database recomputes each score and refuses impossible results, but a browser game can't prove a run really happened, so a determined person could still post a plausible fake.
 
-Serving the folder locally has no API, so the board shows its "unavailable" message. The server recomputes each score and refuses impossible results, but a browser game can't prove a run really happened, so a determined person could still post a plausible fake. To remove a name or score, delete its row in the Cloudflare dashboard.
+- **Remove a name or score:** delete its row in the Supabase dashboard under Table Editor, `scores`.
+- **If the board says it's unavailable:** free Supabase projects pause after about a week without activity. Restore the project from the Supabase dashboard. The scores are kept.
 
 ## Controls
 
@@ -59,8 +56,8 @@ src/storage.js    versioned localStorage save, migration, in-memory fallback
 src/catalog.js    every price, reward and rule value
 src/progress.js   validated purchases, claims and run commits
 src/screens.js    Shop, Characters, Upgrades, Leaderboard and the other pages
-src/leaderboard*  shared top 10: browser client and rules shared with the API
-api/              scores API (Vercel function, Cloudflare D1)
+src/leaderboard*  shared top 10: browser client and the name check
+supabase/         leaderboard table and functions
 tests/            browser test page for the game rules
 assets/img/       art exported from the Figma file
 ```
