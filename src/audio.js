@@ -113,6 +113,9 @@ export const sfx = {
   spotted() { tone({ freq: 520, type: 'square', dur: 0.08, vol: 0.1 }); tone({ freq: 700, type: 'square', dur: 0.1, vol: 0.1, delay: 0.08 }); },
   victory() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone({ freq: f, type: 'triangle', dur: 0.5, vol: 0.22, delay: i * 0.12 })); },
   defeat() { [392, 349, 311, 262].forEach((f, i) => tone({ freq: f, type: 'triangle', dur: 0.45, vol: 0.22, delay: i * 0.18 })); },
+  pulse() { tone({ freq: 140, type: 'sine', dur: 0.4, vol: 0.4, slide: 260 }); noise({ dur: 0.3, vol: 0.2, filter: 700, sweep: 1500 }); },
+  rattle() { [0, 0.07, 0.14, 0.21].forEach((d) => noise({ dur: 0.05, vol: 0.3, filter: 2400, q: 4, delay: d })); },
+  coin() { tone({ freq: 880, type: 'triangle', dur: 0.1, vol: 0.2 }); tone({ freq: 1320, type: 'triangle', dur: 0.2, vol: 0.2, delay: 0.07 }); },
   click() { tone({ freq: 500, type: 'triangle', dur: 0.06, vol: 0.12 }); },
 };
 

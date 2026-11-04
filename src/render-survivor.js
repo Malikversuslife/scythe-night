@@ -1,6 +1,6 @@
 // Last Survivor v2 renderer: three-quarter view city blocks, generated art, cutout rigs.
 // Buildings rise BLD_H tiles above their footprint; rows are drawn back to front.
-import { SURVIVOR, TASKS, taskIndex } from './survivor.js';
+import { SURVIVOR, TASKS, taskIndex, distractionLanding } from './survivor.js';
 import { RIGS, drawRig, pose } from './rig.js';
 import {
   INK, clamp, hash, drawImg, shadow, pool, tilePattern, offscreen,
@@ -62,6 +62,7 @@ const SCENERY = [
 export function createSurvivorRenderer(images) {
   let cache = null;
   const animator = createAnimator();
+  let rigImages = images;
   let effects = [];
   let lastTime = 0;
   let bellAt = -10;
@@ -309,6 +310,33 @@ export function createSurvivorRenderer(images) {
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    // Where the noise-maker would land, and where it did.
+    if (run.skillCooldown === 0 && !run.outcome) {
+      const land = distractionLanding(run);
+      if (land) {
+        ctx.save();
+        ctx.translate(land.x * t, land.y * t);
+        ctx.strokeStyle = AMBER;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.arc(0, 0, t * 0.2, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    if (run.noise) {
+      const k = (run.noise.t * 2) % 1;
+      ctx.save();
+      ctx.translate(run.noise.x * t, run.noise.y * t);
+      ctx.fillStyle = AMBER;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, t * 0.15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = AMBER;
+      ctx.globalAlpha = reduced ? 0.7 : 1 - k;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, t * (reduced ? 0.45 : 0.2 + k * 0.7), 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
     drawEffects(ctx, t, dt, reduced);
     ctx.restore();
     return { tile: t, cx, cy };
@@ -338,7 +366,7 @@ export function createSurvivorRenderer(images) {
       bob: reduced ? 0 : Math.abs(Math.sin(s.phase)) * 9 * s.walk + Math.sin(time * 2) * 2,
       alert: chasing ? 1 : 0,
     });
-    drawRig(g, images, RIGS.mara, pz, p.x * t, (p.y + 0.36) * t, 1.6 * t, { flip: s.flip });
+    drawRig(g, rigImages, RIGS.mara, pz, p.x * t, (p.y + 0.36) * t, 1.6 * t, { flip: s.flip });
   }
 
   function drawZombie(g, z, t, time, dt, reduced) {
@@ -350,7 +378,7 @@ export function createSurvivorRenderer(images) {
     const w = Math.sin(s.phase) * s.walk;
     shadow(g, x, foot - t * 0.04, t * 0.38);
     drawRig(g, images, rig, pose({ t: reduced ? 0 : time + z.id, walk: reduced ? 0 : w, bob: reduced ? 0 : Math.abs(w) * 8 }), x, foot, h, { flip: s.flip });
-    if (z.state === 'chase' || z.state === 'search') {
+    if (z.state === 'chase' || z.state === 'search' || z.state === 'investigate') {
       const mark = z.state === 'chase' ? '!' : '?';
       g.font = `900 ${Math.round(t * 0.6)}px system-ui, sans-serif`;
       g.textAlign = 'center';
@@ -364,5 +392,9 @@ export function createSurvivorRenderer(images) {
     }
   }
 
-  return { draw, event, reset() { effects = []; cache = null; } };
+  return {
+    draw, event,
+    reset() { effects = []; cache = null; },
+    setSkin(overrides) { rigImages = { ...images, ...overrides }; },
+  };
 }

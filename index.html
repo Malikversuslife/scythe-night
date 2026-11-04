@@ -56,17 +56,49 @@
           <button id="btn-splash-settings" class="stone-btn small" type="button"><img class="btn-icon" src="assets/img/ui/icon-gear.png" alt="">Settings</button>
           <button id="btn-splash-sound" class="stone-btn small" type="button" aria-pressed="false"><img class="btn-icon" src="assets/img/ui/icon-sound.png" alt=""><span>Sound on</span></button>
         </div>
-        <p class="version">V-0.5.0 // SECTOR 7</p>
+        <p class="version">V-0.6.0 // SECTOR 7</p>
       </div>
+    </section>
+
+    <!-- Main menu -->
+    <section id="screen-menu" class="screen screen-menu bg-cemetery" aria-labelledby="menu-title" hidden>
+      <header class="topbar">
+        <div class="wallet" data-wallet></div>
+        <button id="btn-menu-sound" class="round-btn" type="button" aria-label="Sound on" aria-pressed="true">
+          <img data-sound-icon src="assets/img/ui/icon-sound.png" alt="">
+        </button>
+      </header>
+      <h1 id="menu-title" class="menu-logo"><img src="assets/img/title-logo.webp" alt="Scythe Night" draggable="false"></h1>
+      <button id="btn-menu-play" class="grave-btn grave-play" type="button">
+        <img src="assets/img/menu/play.png" alt="" draggable="false"><span class="grave-label">Play</span>
+      </button>
+      <div class="grave-grid">
+        <button class="grave-btn" type="button" data-route="shop"><img src="assets/img/menu/shop.png" alt="" draggable="false"><span class="grave-label">Shop</span></button>
+        <button class="grave-btn" type="button" data-route="characters"><img src="assets/img/menu/characters.png" alt="" draggable="false"><span class="grave-label">Characters</span></button>
+        <button class="grave-btn" type="button" data-route="upgrades"><img src="assets/img/menu/upgrades.png" alt="" draggable="false"><span class="grave-label">Upgrades</span></button>
+        <button id="btn-menu-settings" class="grave-btn" type="button"><img src="assets/img/menu/settings.png" alt="" draggable="false"><span class="grave-label">Settings</span></button>
+      </div>
+      <button class="stone-btn" type="button" data-route="more">
+        <img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">More
+        <span class="badge" data-badge-count="total" hidden></span>
+      </button>
+      <p class="fine-print menu-note" data-storage-note hidden>Temporary session: progress and unlocks will not be saved on this device.</p>
+    </section>
+
+    <!-- Destination pages (shop, records, missions...) -->
+    <section id="screen-page" class="screen screen-page bg-cemetery dim" aria-labelledby="page-title" hidden>
+      <header class="page-head">
+        <button id="btn-page-back" class="round-btn" type="button" aria-label="Back"><img src="assets/img/ui/icon-back.png" alt=""></button>
+        <h1 id="page-title" class="page-title" tabindex="-1"></h1>
+        <div class="wallet" data-wallet></div>
+      </header>
+      <div id="page-body" class="page-body"></div>
     </section>
 
     <!-- Story select -->
     <section id="screen-select" class="screen screen-select bg-cemetery" aria-labelledby="select-title" hidden>
       <header class="topbar">
-        <div class="best-pill" aria-label="Keeper best score">
-          <img src="assets/img/sprite-soul.png" alt="">
-          <div><strong id="select-best">0</strong><span>Best</span></div>
-        </div>
+        <div class="wallet" data-wallet></div>
         <div class="topbar-buttons">
           <button id="btn-select-back" class="round-btn" type="button" aria-label="Back to title">
             <img src="assets/img/ui/icon-back.png" alt="">
@@ -80,6 +112,7 @@
         <img src="assets/img/banner-select.png" alt="Select your story" draggable="false">
       </h1>
       <div class="card-list">
+        <div class="story-col">
         <button class="story-card" type="button" data-campaign="keeper" aria-describedby="card-keeper-desc">
           <img src="assets/img/card-keeper.webp" alt="Story Mode I: The Cemetery Keeper" draggable="false">
           <span class="card-badge" data-badge="keeper" hidden>✓ Completed</span>
@@ -87,6 +120,8 @@
         <p id="card-keeper-desc" class="card-caption">
           <strong>Play as Pip the reaper.</strong> Take the night shift. Cut through the restless dead, free their souls, and keep the city gate sealed.
         </p>
+        </div>
+        <div class="story-col">
         <button class="story-card" type="button" data-campaign="survivor" aria-describedby="card-survivor-desc">
           <img src="assets/img/card-survivor.webp" alt="Story Mode II: The Last Survivor" draggable="false">
           <span class="card-badge" data-badge="survivor" hidden>✓ Completed</span>
@@ -94,13 +129,14 @@
         <p id="card-survivor-desc" class="card-caption">
           <strong>Play as Mara the courier.</strong> The city has fallen silent. Avoid the dead, restore the refuge route, and reach safety before they catch you.
         </p>
+        </div>
       </div>
     </section>
 
     <!-- Intro / how to play -->
     <section id="screen-intro" class="screen screen-intro bg-cemetery" aria-labelledby="intro-title" hidden>
       <div class="stone-panel intro-panel">
-        <img id="intro-sprite" class="intro-sprite" src="" alt="">
+        <canvas id="intro-preview" class="intro-preview" aria-hidden="true"></canvas>
         <h1 id="intro-title" class="display-title"></h1>
         <p id="intro-story" class="intro-story"></p>
         <h2 class="panel-heading">How to play</h2>
@@ -143,6 +179,13 @@
           <div class="joystick-base"></div>
           <img class="joystick-knob" id="joystick-knob" src="assets/img/btn-skull.png" alt="" draggable="false">
         </div>
+        <div class="skill-wrap">
+          <button id="btn-skill" class="skill-btn" type="button">
+            <span class="skill-icon" id="skill-icon" aria-hidden="true"></span>
+            <span class="skill-cd" id="skill-cd" aria-hidden="true" hidden></span>
+          </button>
+          <span class="action-label" id="skill-label"></span>
+        </div>
         <div class="action-wrap">
           <button id="btn-action" class="action-btn" type="button">
             <span class="action-icon" id="action-icon" aria-hidden="true"></span>
@@ -164,10 +207,26 @@
         </div>
         <p id="results-best" class="results-best"></p>
         <p id="results-ending" class="results-ending"></p>
+        <div id="results-rewards" class="results-rewards"></div>
+        <form id="post-form" class="post-form" hidden>
+          <h2 class="panel-heading"><label for="post-name">Post to the leaderboard</label></h2>
+          <div class="post-row">
+            <input id="post-name" type="text" autocomplete="nickname" spellcheck="false" placeholder="Your name">
+            <button id="btn-post" class="stone-btn small primary" type="submit">Post</button>
+          </div>
+          <p id="post-status" class="fine-print" role="status"></p>
+        </form>
       </div>
+      <div class="results-foot">
       <div class="results-actions">
         <button id="btn-retry" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-restart.png" alt="">Retry</button>
-        <button id="btn-results-select" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">Stories</button>
+        <button id="btn-results-menu" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">Menu</button>
+      </div>
+      <div class="results-links">
+        <button class="stone-btn small" type="button" data-results-route="shop">Shop</button>
+        <button class="stone-btn small" type="button" data-results-route="upgrades">Upgrades</button>
+        <button id="btn-results-select" class="stone-btn small" type="button">Stories</button>
+      </div>
       </div>
     </section>
 
@@ -175,6 +234,7 @@
     <div id="overlay-pause" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
       <div class="stone-panel overlay-panel">
         <h2 id="pause-title" class="display-title">Paused</h2>
+        <div class="pause-grid">
         <div class="menu-stack">
           <button id="btn-resume" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Resume</button>
           <button id="btn-restart" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-restart.png" alt="">Restart</button>
@@ -182,6 +242,30 @@
           <button id="btn-pause-settings" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-gear.png" alt="">Settings</button>
           <button id="btn-pause-select" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">Story select</button>
         </div>
+        <button id="btn-pause-quit" class="grave-btn pause-quit" type="button" aria-label="Quit to main menu">
+          <img src="assets/img/menu/quit.png" alt="" draggable="false"><span class="pause-quit-label">Main menu</span>
+        </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shop item details -->
+    <div id="overlay-item" class="overlay" role="dialog" aria-modal="true" aria-labelledby="item-title" hidden>
+      <div class="stone-panel overlay-panel">
+        <h2 id="item-title" class="display-title small"></h2>
+        <canvas id="item-preview" class="item-preview" aria-hidden="true"></canvas>
+        <p id="item-desc" class="item-desc"></p>
+        <p id="item-status" class="item-status"></p>
+        <div id="item-actions" class="menu-stack"></div>
+      </div>
+    </div>
+
+    <!-- Only one tab may play at a time, so two tabs can't overwrite each other's save -->
+    <div id="overlay-tab" class="overlay overlay-tab" role="alertdialog" aria-modal="true" aria-labelledby="tab-title" hidden>
+      <div class="stone-panel overlay-panel">
+        <h2 id="tab-title" class="display-title small">Open in another tab</h2>
+        <p>Scythe Night is running in another tab. Only one tab plays at a time, so your save stays safe.</p>
+        <div class="menu-stack"><button id="btn-tab-here" class="stone-btn primary" type="button">Play here</button></div>
       </div>
     </div>
 
@@ -233,7 +317,8 @@
           </select>
         </div>
         <p class="fine-print">Keyboard: move with WASD or arrow keys. Slash with Space or J. Interact with E or Space. Pause with Escape or P.</p>
-        <p class="fine-print" id="storage-note" hidden>Progress will not be saved on this device.</p>
+        <p class="fine-print" data-storage-note hidden>Temporary session: progress and unlocks will not be saved on this device.</p>
+        <p class="fine-print">Progress lives in this browser. Clearing browser data removes it.</p>
         <div class="menu-stack">
           <button id="btn-settings-close" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Done</button>
           <button id="btn-reset-data" class="stone-btn danger small" type="button">Reset saved data</button>

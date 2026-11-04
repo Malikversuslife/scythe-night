@@ -12,13 +12,14 @@ function capture(el, id) {
   try { el.setPointerCapture(id); } catch { /* pointer no longer active */ }
 }
 
-export function createInput({ joystick, knob, actionBtn, surface, actionKeys, onPause, isActive }) {
+export function createInput({ joystick, knob, actionBtn, skillBtn, surface, actionKeys, onPause, isActive }) {
   const held = new Set();
   let stick = { x: 0, y: 0 };
   let stickPointer = null;
   let actionPointer = null;
   let actionQueued = false;
   let actionHeld = false;
+  let skillQueued = false;
 
   // ---- Keyboard ----
   window.addEventListener('keydown', (e) => {
@@ -31,6 +32,9 @@ export function createInput({ joystick, knob, actionBtn, surface, actionKeys, on
     if (MOVE_KEYS[e.code]) {
       e.preventDefault();
       held.add(e.code);
+    } else if (e.code === 'KeyK') {
+      e.preventDefault();
+      if (!e.repeat) skillQueued = true;
     } else if (actionKeys().includes(e.code)) {
       e.preventDefault();
       if (!e.repeat) actionQueued = true;
@@ -89,6 +93,16 @@ export function createInput({ joystick, knob, actionBtn, surface, actionKeys, on
   // Keyboard Enter/Space on the focused button produces a click with detail 0.
   actionBtn.addEventListener('click', (e) => { if (e.detail === 0 && isActive()) actionQueued = true; });
 
+  // ---- Skill button ----
+  skillBtn.addEventListener('pointerdown', (e) => {
+    if (!isActive()) return;
+    e.preventDefault();
+    skillBtn.classList.add('pressed');
+    skillQueued = true;
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) skillBtn.addEventListener(ev, () => skillBtn.classList.remove('pressed'));
+  skillBtn.addEventListener('click', (e) => { if (e.detail === 0 && isActive()) skillQueued = true; });
+
   // Joystick + action at once is two fingers, which mobile browsers read as a pinch,
   // and fast taps read as double-tap zoom. Cancel the browser's own touch handling over
   // the play area and controls (pointer events still arrive); HUD buttons keep theirs.
@@ -107,15 +121,18 @@ export function createInput({ joystick, knob, actionBtn, surface, actionKeys, on
       for (const code of held) { x += MOVE_KEYS[code][0]; y += MOVE_KEYS[code][1]; }
       const len = Math.hypot(x, y);
       if (len > 1) { x /= len; y /= len; }
-      const action = actionQueued;
+      const action = actionQueued, skill = skillQueued;
       actionQueued = false;
-      return { x, y, action, actionHeld };
+      skillQueued = false;
+      return { x, y, action, actionHeld, skill };
     },
     clear() {
       held.clear();
       releaseStick();
       releaseAction();
       actionQueued = false;
+      skillQueued = false;
+      skillBtn.classList.remove('pressed');
     },
   };
 }

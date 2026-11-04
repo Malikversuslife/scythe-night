@@ -5,6 +5,8 @@ A mobile-first cartoon cemetery game for the browser with two stories:
 - **Cemetery Keeper**: play as Pip the reaper. Slash undead in a grave maze, free their souls, and stop them reaching the city gate. Three waves, three health, three breaches.
 - **Last Survivor**: play as Mara. Avoid zombies in the city streets, collect the fuse, restore power, ring the bell, and reach the refuge.
 
+Grave Coins, a Shop, Characters, Upgrades, skills, achievements, missions, daily rewards, the Keeper's Trial event and the free Night Journal all run locally in the browser. The shared Leaderboard is the one online feature.
+
 ## Run it
 
 The game is plain HTML, CSS, and JavaScript modules, so there is no build step. Browsers won't load ES modules from `file://`, so serve the folder:
@@ -13,7 +15,19 @@ The game is plain HTML, CSS, and JavaScript modules, so there is no build step. 
 python -m http.server 5173
 ```
 
-Then open <http://localhost:5173>. Logic tests run at <http://localhost:5173/tests/>.
+Then open <http://localhost:5173>. Logic tests run at <http://localhost:5173/tests/>. With `?debug` in the game's URL, `await (await import('/tests/ui-audit.js')).audit()` checks every screen's layout at the current size.
+
+## Leaderboard setup
+
+The top 10 is a Vercel function (`api/scores.mjs`) in front of a Cloudflare D1 database named `scythe-night`. Its `scores` table keeps one row per device: a random id, a public name, and that player's best score and time. It needs three environment variables on the Vercel project:
+
+| Variable | Value |
+| --- | --- |
+| `CF_ACCOUNT_ID` | Your Cloudflare account ID |
+| `CF_D1_DATABASE_ID` | `4a40b965-dc22-4bf8-ac6d-245ad2028697` |
+| `CF_API_TOKEN` | A Cloudflare API token with **D1: Edit** permission only (keep it secret) |
+
+Serving the folder locally has no API, so the board shows its "unavailable" message. The server recomputes each score and refuses impossible results, but a browser game can't prove a run really happened, so a determined person could still post a plausible fake. To remove a name or score, delete its row in the Cloudflare dashboard.
 
 ## Controls
 
@@ -22,6 +36,7 @@ Then open <http://localhost:5173>. Logic tests run at <http://localhost:5173/tes
 | Move | Left joystick | WASD / arrow keys |
 | Slash (Keeper) | Scythe button | Space / J |
 | Interact (Survivor) | Hand button | E / Space |
+| Skill (Soul Pulse / Distraction) | Skill button | K |
 | Pause | Top-right button | Esc / P |
 
 ## Layout
@@ -40,7 +55,12 @@ src/render-common.js    shared drawing, camera, occlusion and lighting helpers
 src/rig.js        cutout character rigs and poses
 src/input.js      keyboard + joystick + action button
 src/audio.js      Web Audio synthesized music and effects
-src/storage.js    versioned localStorage save with in-memory fallback
+src/storage.js    versioned localStorage save, migration, in-memory fallback
+src/catalog.js    every price, reward and rule value
+src/progress.js   validated purchases, claims and run commits
+src/screens.js    Shop, Characters, Upgrades, Leaderboard and the other pages
+src/leaderboard*  shared top 10: browser client and rules shared with the API
+api/              scores API (Vercel function, Cloudflare D1)
 tests/            browser test page for the game rules
 assets/img/       art exported from the Figma file
 ```
@@ -48,6 +68,8 @@ assets/img/       art exported from the Figma file
 ## Assets
 
 - `assets/img/`: menu and v1 art exported from the project's Figma file (splash, story select, sprite and button sheets).
+- `assets/img/menu/`: tombstone buttons cut from the Figma button sheet; see `MANIFEST.md` there for each source region.
+- `assets/img/v2/cos/`: cosmetic recolours of the rig parts.
 - `assets/img/ui/`: the stone UI kit, generated without text so labels stay real HTML. It includes stretchable slab buttons, the board frame and winged-skull crest, round buttons, the joystick base, the action button, medallions, and lime icons. Buttons and boards are 9-slice `border-image`s in `styles.css`. Labels use Lilita One from Google Fonts.
 - `assets/img/v2/`: art for both campaigns, generated with Figma AI in the reference style. The source images are in the same Figma file.
   - Cemetery Keeper: seamless ground and wall textures, gravestones and props, the mausoleum, trees and gate, HUD icons, and effects.

@@ -4,6 +4,7 @@ import { TASKS, taskIndex } from './survivor.js';
 import { createKeeperRenderer } from './render-keeper.js';
 import { createSurvivorRenderer } from './render-survivor.js';
 import { INK, clamp } from './render-common.js';
+import { RIGS, drawRig, pose } from './rig.js';
 
 const SOUL = '#baf45a';
 const AMBER = '#ffd789';
@@ -42,7 +43,24 @@ export function createRenderer(canvas, images) {
     draw,
     event: (ev, run) => (run?.campaign === 'survivor' ? survivor : keeper).event(ev, run),
     reset: () => { keeper.reset(); survivor.reset(); },
+    setSkin: (overrides, glow) => { keeper.setSkin(overrides, glow); survivor.setSkin(overrides); },
   };
+}
+
+// Standing character for menus: same rig and art as in play.
+export function drawPreview(canvas, campaign, images, overrides = {}) {
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || canvas.clientWidth || 120, h = rect.height || canvas.clientHeight || 140;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const rig = campaign === 'keeper' ? RIGS.reaper : RIGS.mara;
+  const skin = { ...images, ...overrides };
+  // The rig's art hangs a little below its feet (scythe, lantern), so stand it above the base.
+  drawRig(ctx, skin, rig, pose(), w / 2, h * 0.86, h * 0.8);
 }
 
 // Arrow on the edge of the play band pointing at an offscreen world point.

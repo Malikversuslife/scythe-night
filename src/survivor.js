@@ -1,5 +1,6 @@
 // Campaign B — Last Survivor. Pure simulation: no DOM, no rendering.
 import { parseMap, moveCircle, lineOfSight, distanceField, nextStep, isSolid, dist2, tileOf, center } from './world.js';
+import { SKILLS } from './catalog.js';
 
 // '#' building, 'x' crates/bins (solid), '.' street, 'P' start,
 // 'F' maintenance kiosk (fuse), 'B' refuge power box, 'L' courtyard bell, 'R' refuge door.
@@ -51,6 +52,7 @@ export const SURVIVOR = {
   interactRange: 1.3,
   contact: 0.52,
   repath: 0.25,
+  investigateSpeed: 1.8,
 };
 
 export const TASKS = [
@@ -64,7 +66,7 @@ const NEEDS = {
   bell: 'The bell is chained until the refuge has power.',
 };
 
-export function createSurvivorRun() {
+export function createSurvivorRun(loadout = {}) {
   const map = parseMap(SURVIVOR_MAP, '#xFBLR');
   const start = map.marks.P[0];
   const door = map.marks.R[0];
@@ -78,11 +80,16 @@ export function createSurvivorRun() {
     state: 'patrol', // 'patrol' | 'chase' | 'search' | 'return'
     lost: 0,
     lastSeen: null,
+    investigate: 0,
+    noiseAt: null,
     field: null, fieldKey: '', fieldAge: 0,
     fx: 1, fy: 0,
   }));
   return {
     campaign: 'survivor',
+    rules: { distractCooldown: loadout.distractCooldown ?? 22, distractDuration: loadout.distractDuration ?? 3 },
+    skillCooldown: 0,
+    noise: null, // { x, y, t }: where the last noise-maker landed
     map,
     player: { x: start.c + 0.5, y: start.r + 0.5, r: SURVIVOR.playerRadius, fx: 0, fy: -1, moving: false },
     objects,
@@ -127,6 +134,41 @@ export function interactionTarget(run) {
   return { task: best, enabled: true, hint: best.verb };
 }
 
+// Where a noise-maker would land, stopping short of solid geometry. Null when there's no room.
+export function distractionLanding(run) {
+  const p = run.player, solid = solidFor(run), sk = SKILLS.survivor;
+  const stepLen = 0.05, margin = 0.2;
+  let dist = 0;
+  while (dist + stepLen <= sk.range) {
+    const reach = dist + stepLen + margin;
+    if (solid(run.map, Math.floor(p.x + p.fx * reach), Math.floor(p.y + p.fy * reach))) break;
+    dist += stepLen;
+  }
+  if (dist < sk.minThrow) return null;
+  return { x: p.x + p.fx * dist, y: p.y + p.fy * dist };
+}
+
+function useDistraction(run, events) {
+  const landing = distractionLanding(run);
+  if (!landing) {
+    events.push({ type: 'skillDenied', hint: 'No room to throw. Face open street.' });
+    return;
+  }
+  run.skillCooldown = run.rules.distractCooldown;
+  run.noise = { ...landing, t: 0 };
+  let heard = 0;
+  for (const z of run.zombies) {
+    // A zombie already looking at Mara keeps chasing: this isn't invisibility.
+    if (dist2(z, landing) > SKILLS.survivor.hearing ** 2 || canSee(run, z)) continue;
+    z.investigate = run.rules.distractDuration;
+    z.noiseAt = { c: Math.floor(landing.x), r: Math.floor(landing.y) };
+    z.state = 'investigate';
+    z.field = null;
+    heard++;
+  }
+  events.push({ type: 'distraction', x: landing.x, y: landing.y, heard });
+}
+
 export function stepSurvivor(run, input, dt) {
   const events = [];
   if (run.outcome) return events;
@@ -144,6 +186,14 @@ export function stepSurvivor(run, input, dt) {
     p.fy = input.y / mag;
     moveCircle(run.map, p, input.x * SURVIVOR.playerSpeed * dt, input.y * SURVIVOR.playerSpeed * dt, solid);
   }
+
+  // ---- Distraction ----
+  run.skillCooldown = Math.max(0, run.skillCooldown - dt);
+  if (run.noise) {
+    run.noise.t += dt;
+    if (run.noise.t >= run.rules.distractDuration) run.noise = null;
+  }
+  if (input.skill && run.skillCooldown === 0) useDistraction(run, events);
 
   // ---- Interaction ----
   if (input.action) {
@@ -193,7 +243,14 @@ function updateZombie(run, z, dt, solid, events) {
     if (z.state !== 'chase') events.push({ type: 'spotted', id: z.id });
     z.state = 'chase';
     z.lost = 0;
+    z.investigate = 0;
     z.lastSeen = { x: run.player.x, y: run.player.y };
+  } else if (z.state === 'investigate') {
+    z.investigate -= dt;
+    if (z.investigate <= 0) {
+      z.state = 'return';
+      z.field = null;
+    }
   } else if (z.state === 'chase' || z.state === 'search') {
     z.state = 'search';
     z.lost += dt;
@@ -210,8 +267,9 @@ function updateZombie(run, z, dt, solid, events) {
     moveToward(run, z, run.player, SURVIVOR.chaseSpeed * dt, solid);
   } else {
     // Search the last sighting, or walk home along the street grid.
-    const goal = z.state === 'return' ? z.route[z.wp] : tileOf(z.lastSeen);
-    followField(run, z, goal, (z.state === 'return' ? SURVIVOR.patrolSpeed : SURVIVOR.chaseSpeed) * dt, solid, dt);
+    const goal = z.state === 'return' ? z.route[z.wp] : z.state === 'investigate' ? z.noiseAt : tileOf(z.lastSeen);
+    const speed = z.state === 'return' ? SURVIVOR.patrolSpeed : z.state === 'investigate' ? SURVIVOR.investigateSpeed : SURVIVOR.chaseSpeed;
+    followField(run, z, goal, speed * dt, solid, dt);
     if (z.state === 'return' && dist2(z, center(goal)) < 0.05) {
       z.state = 'patrol';
       z.field = null;

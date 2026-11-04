@@ -2,6 +2,7 @@
 // World units are tiles. Walls rise WALL_H tiles above their footprint, so each
 // row is drawn back-to-front with the characters standing in it.
 import { KEEPER } from './keeper.js';
+import { SKILLS } from './catalog.js';
 import { RIGS, drawRig, pose } from './rig.js';
 import {
   INK, clamp, lerp, easeOut, hash, drawImg, shadow, pool, tilePattern, offscreen,
@@ -63,6 +64,7 @@ const LANTERNS = [[4, 4], [8, 4], [4, 10], [8, 10]];
 export function createKeeperRenderer(images) {
   let cache = null; // ground layer for the current tile size
   const animator = createAnimator();
+  let rigImages = images, lanternGlow = '150, 230, 80';
   let effects = [];
   let lastTime = 0;
   const cam = { x: null, y: null };
@@ -252,7 +254,7 @@ export function createKeeperRenderer(images) {
     for (const s of run.souls) light(s.x, s.y - 0.3, 1.1, '170, 240, 90', 0.3);
     if (run.seal) light(run.seal.x, run.seal.y, 1.6, '170, 240, 90', 0.35);
     for (const s of run.spawns) light(s.c + 0.5, s.r + 0.6, 1.0, '150, 90, 220', 0.25);
-    light(run.player.x + (animator.get(run.player)?.flip ? 0.5 : -0.5), run.player.y - 0.2, 1.4, '150, 230, 80', 0.16);
+    light(run.player.x + (animator.get(run.player)?.flip ? 0.5 : -0.5), run.player.y - 0.2, 1.4, lanternGlow, 0.16);
     g.restore();
   }
 
@@ -341,6 +343,20 @@ export function createKeeperRenderer(images) {
     }
 
     drawSlash(ctx, run, t);
+    if (run.pulse) {
+      // Expanding ring, or a steady fading one when motion is reduced.
+      const k = run.pulse.t / 0.45, R = SKILLS.keeper.radius * t * (reduced ? 1 : easeOut(k));
+      ctx.save();
+      ctx.translate(run.player.x * t, run.player.y * t);
+      ctx.globalAlpha = 1 - k * k;
+      ctx.lineWidth = t * 0.22;
+      ctx.strokeStyle = INK;
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = t * 0.12;
+      ctx.strokeStyle = SOUL;
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
     drawEffects(ctx, t, dt, reduced);
     drawLights(ctx, run, t, time, reduced);
     ctx.restore();
@@ -356,7 +372,7 @@ export function createKeeperRenderer(images) {
     shadow(g, p.x * t, (p.y + 0.32) * t, t * 0.42);
     let alpha = 1;
     if (run.invuln > 0 && !reduced) alpha = Math.floor(time * 12) % 2 ? 0.45 : 1;
-    drawRig(g, images, RIGS.reaper, reaperPose(run, s, time, reduced), p.x * t, (p.y + 0.36) * t, 1.85 * t, { flip: s.flip, alpha });
+    drawRig(g, rigImages, RIGS.reaper, reaperPose(run, s, time, reduced), p.x * t, (p.y + 0.36) * t, 1.85 * t, { flip: s.flip, alpha });
     if (run.invuln > 0 && reduced) {
       g.strokeStyle = '#ff8a8a';
       g.lineWidth = 3;
@@ -410,5 +426,9 @@ export function createKeeperRenderer(images) {
     drawImg(g, images.soulFlame, s.x * t, (s.y + 0.15 + bob) * t, 0.62 * t);
   }
 
-  return { draw, event, reset() { effects = []; cache = null; } };
+  return {
+    draw, event,
+    reset() { effects = []; cache = null; },
+    setSkin(overrides, glowRgb) { rigImages = { ...images, ...overrides }; lanternGlow = glowRgb || '150, 230, 80'; },
+  };
 }

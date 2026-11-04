@@ -1,12 +1,28 @@
 import { createKeeperRun, stepKeeper, KEEPER } from '../src/keeper.js';
-import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, TASKS, PATROLS, SURVIVOR } from '../src/survivor.js';
+import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, distractionLanding, TASKS, PATROLS, SURVIVOR } from '../src/survivor.js';
 import { distanceField, isSolid, lineOfSight, moveCircle } from '../src/world.js';
 import { sanitize, createStore, defaultSave } from '../src/storage.js';
+import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS } from '../src/catalog.js';
+import { cleanName, checkRun } from '../src/leaderboard-rules.mjs';
+import { getBoard, postScore } from '../api/_scores.mjs';
+import { fetchBoard, submitScore } from '../src/leaderboard.js';
+import { boardRowsHtml } from '../src/screens.js';
+import {
+  commitRun, runLoadout, buyCosmetic, equipCosmetic, buyUpgrade, achievementStatus, claimAchievement,
+  missionStatus, claimMission, claimDaily, dailyStatus, nextResetMs, journalTierStatus, claimJournalTier,
+  hasJournalBadge, claimableCounts,
+} from '../src/progress.js';
 
 const results = [];
+const pending = [];
 function test(name, fn) {
-  try { fn(); results.push({ name, ok: true }); }
-  catch (e) { results.push({ name, ok: false, err: e.stack || String(e) }); }
+  const entry = { name, ok: true };
+  results.push(entry);
+  const fail = (e) => { entry.ok = false; entry.err = e.stack || String(e); };
+  try {
+    const out = fn();
+    if (out?.then) pending.push(out.catch(fail));
+  } catch (e) { fail(e); }
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); }
 function eq(a, b, msg) { if (a !== b) throw new Error(`${msg || 'expected equal'}: got ${a}, expected ${b}`); }
@@ -406,31 +422,588 @@ test('Survivor: an honest run (keyboard pathing, real zombies) can reach the ref
 
 // ---------------- Storage ----------------
 
-test('Storage: corrupted and older records are sanitized to defaults', () => {
-  eq(JSON.stringify(sanitize(null)), JSON.stringify(defaultSave()));
-  const s = sanitize({ settings: { music: 'loud', sfx: 400, reducedMotion: 'maybe' }, keeperBest: -5, completed: { keeper: 'yes' } });
-  eq(s.settings.music, 60); eq(s.settings.sfx, 100); eq(s.settings.reducedMotion, 'system');
-  eq(s.keeperBest, 0); eq(s.completed.keeper, false);
+const memBackend = (seed = {}) => {
+  const m = new Map(Object.entries(seed));
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), raw: m };
+};
+const NOW = Date.UTC(2026, 10, 4, 12);
+
+test('Save: a v1 save migrates without losing records or settings, and keeps a backup', () => {
+  const v1 = JSON.stringify({ version: 1, settings: { music: 25, sfx: 40, muted: true, reducedMotion: 'on' }, keeperBest: 1840, completed: { keeper: true, survivor: false }, tutorialSeen: { keeper: true, survivor: false } });
+  const b = memBackend({ 'scythe-night:save': v1 });
+  const s = createStore(b);
+  eq(s.data.version, 2);
+  eq(s.data.settings.music, 25);
+  eq(s.data.settings.muted, true);
+  eq(s.data.records.keeperBest.score, 1840);
+  eq(s.data.records.completions.keeper, 1);
+  eq(s.data.lifetimeStats.keeperWins, 1);
+  eq(s.data.tutorialSeen.keeper, true);
+  eq(s.data.wallet.graveCoins, 0);
+  eq(b.getItem('scythe-night:save:backup-v1'), v1);
 });
 
-test('Storage: works in memory when storage throws, and reset clears records', () => {
+test('Save: corrupted data, bad numbers and unknown IDs fall back safely', () => {
+  eq(JSON.stringify(sanitize(null)), JSON.stringify(defaultSave()));
+  const s = sanitize({ version: 2, settings: { music: 'loud', sfx: 400, reducedMotion: 'maybe' },
+    wallet: { graveCoins: -50 }, ownedCosmeticIds: ['pip-moon', 'not-real', 'pip-default'],
+    equippedByCampaign: { keeper: { appearance: 'pip-moss', weapon: 'mara-amber' } },
+    upgradeLevels: { soulReach: 99, pulseRecovery: -3, nonsense: 2 }, claimedAchievementIds: ['fake'] });
+  eq(s.settings.music, 60); eq(s.settings.sfx, 100); eq(s.settings.reducedMotion, 'system');
+  eq(s.wallet.graveCoins, 0);
+  eq(s.ownedCosmeticIds.join(), 'pip-moon');
+  eq(s.equippedByCampaign.keeper.appearance, 'pip-default', 'cannot equip what is not owned');
+  eq(s.equippedByCampaign.keeper.weapon, 'scythe-default', 'cannot equip into the wrong slot');
+  eq(s.upgradeLevels.soulReach, 2); eq(s.upgradeLevels.pulseRecovery, 0);
+  eq(s.upgradeLevels.nonsense, undefined);
+  eq(s.claimedAchievementIds.length, 0);
+  const b = memBackend({ 'scythe-night:save': '{not json' });
+  eq(createStore(b).data.wallet.graveCoins, 0);
+  eq(b.getItem('scythe-night:save:corrupt'), '{not json', 'the unreadable copy is kept');
+});
+
+test('Save: blocked storage works in memory and reports it was not saved; reset clears', () => {
   const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); }, removeItem() {} };
-  const store = createStore(broken);
-  store.update((d) => { d.keeperBest = 123; });
-  eq(store.data.keeperBest, 123);
-  const mem = new Map();
-  const ok = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
-  const s2 = createStore(ok);
-  s2.update((d) => { d.keeperBest = 50; d.settings.music = 10; });
-  eq(createStore(ok).data.keeperBest, 50);
+  const s = createStore(broken);
+  const r = s.transact((d) => { d.wallet.graveCoins = 123; return {}; });
+  eq(r.saved, false);
+  eq(s.available, false);
+  eq(s.data.wallet.graveCoins, 123);
+  const b = memBackend();
+  const s2 = createStore(b);
+  eq(s2.transact((d) => { d.wallet.graveCoins = 50; return {}; }).saved, true);
+  eq(createStore(b).data.wallet.graveCoins, 50, 'survives a reload');
   s2.reset();
-  eq(createStore(ok).data.keeperBest, 0);
-  ok.setItem('scythe-night:save', '{not json');
-  eq(createStore(ok).data.keeperBest, 0);
+  eq(createStore(b).data.wallet.graveCoins, 0);
+});
+
+test('Save: two tabs on one save cannot double-spend or undo each other', () => {
+  const b = memBackend();
+  const a = createStore(b), other = createStore(b);
+  a.transact((d) => { d.wallet.graveCoins = 100; return {}; });
+  eq(other.transact((d) => buyCosmetic(d, 'pip-moon', NOW)).ok, true, 'the stale tab reads the new balance first');
+  const again = a.transact((d) => buyCosmetic(d, 'pip-moon', NOW));
+  eq(again.ok, false);
+  eq(again.reason, 'owned');
+  eq(createStore(b).data.wallet.graveCoins, 0);
+  a.transact((d) => { d.wallet.graveCoins += 5; return {}; });
+  eq(createStore(b).data.ownedCosmeticIds.join(), 'pip-moon', 'the other tab\'s purchase is not overwritten');
+});
+
+// ---------------- Economy ----------------
+
+const keeperSummary = (over = {}) => ({ id: 'r1', campaign: 'keeper', eventId: null, result: 'defeat', time: 60, score: 300, upgrades: {}, souls: 0, seals: 0, breaches: 0, tasks: 0, ...over });
+const survivorSummary = (over = {}) => ({ id: 's1', campaign: 'survivor', eventId: null, result: 'defeat', time: 60, score: null, upgrades: {}, souls: 0, seals: 0, breaches: 0, tasks: 0, ...over });
+
+test('Rewards: Keeper pays 1 per soul, 10 per seal, 30 for victory; XP matches', () => {
+  const s = defaultSave();
+  const r = commitRun(s, keeperSummary({ result: 'victory', souls: 18, seals: 3 }), NOW);
+  eq(r.coins, 18 + 30 + 30);
+  eq(r.xp, 18 * 2 + 3 * 10 + 30);
+  eq(s.wallet.graveCoins, 78);
+  eq(s.nightJournal.xp, 96);
+  eq(r.walletBefore, 0); eq(r.walletAfter, 78);
+});
+
+test('Rewards: Survivor pays 10 per task, 30 for the refuge; a defeat keeps earned actions only', () => {
+  const s = defaultSave();
+  const win = commitRun(s, survivorSummary({ id: 'a', result: 'victory', tasks: 3 }), NOW);
+  eq(win.coins, 60); eq(win.xp, 3 * 15 + 30);
+  const lose = commitRun(s, survivorSummary({ id: 'b', tasks: 1 }), NOW);
+  eq(lose.coins, 10); eq(lose.xp, 15);
+  const none = commitRun(s, keeperSummary({ id: 'c' }), NOW);
+  eq(none.coins, 0, 'no defeat bonus'); eq(none.xp, 0);
+});
+
+test('Rewards: the same run can never pay twice', () => {
+  const s = defaultSave();
+  const sum = keeperSummary({ souls: 5 });
+  eq(commitRun(s, sum, NOW).ok, true);
+  const again = commitRun(s, sum, NOW);
+  eq(again.ok, false); eq(again.reason, 'duplicate');
+  eq(s.wallet.graveCoins, 5);
+  eq(s.lifetimeStats.souls, 5);
+  eq(s.records.recentRuns.length, 1);
+});
+
+test('Rewards: runs under 10 active seconds still pay but do not count as played', () => {
+  const s = defaultSave();
+  eq(commitRun(s, keeperSummary({ id: 'x', time: 9, souls: 2 }), NOW).coins, 2);
+  eq(s.lifetimeStats.countedRuns, 0);
+  commitRun(s, keeperSummary({ id: 'y', time: 10 }), NOW);
+  eq(s.lifetimeStats.countedRuns, 1);
+});
+
+test('Records: a Survivor failure never sets the fastest time; recent runs cap at 20', () => {
+  const s = defaultSave();
+  commitRun(s, survivorSummary({ id: 'fail', time: 5, tasks: 0 }), NOW);
+  eq(s.records.survivorFastest, null);
+  commitRun(s, survivorSummary({ id: 'w1', result: 'victory', time: 200, tasks: 3 }), NOW);
+  commitRun(s, survivorSummary({ id: 'w2', result: 'victory', time: 150, tasks: 3 }), NOW);
+  commitRun(s, survivorSummary({ id: 'w3', result: 'victory', time: 300, tasks: 3 }), NOW);
+  eq(s.records.survivorFastest.time, 150);
+  eq(s.records.completions.survivor, 3);
+  for (let i = 0; i < 30; i++) commitRun(s, keeperSummary({ id: `k${i}` }), NOW);
+  eq(s.records.recentRuns.length, 20);
+});
+
+// ---------------- Shop & upgrades ----------------
+
+test('Shop: insufficient funds buys nothing; owned and free items cannot be bought', () => {
+  const s = defaultSave();
+  s.wallet.graveCoins = 99;
+  const short = buyCosmetic(s, 'pip-moon', NOW);
+  eq(short.ok, false); eq(short.reason, 'funds'); eq(short.need, 1);
+  eq(s.wallet.graveCoins, 99); eq(s.ownedCosmeticIds.length, 0);
+  s.wallet.graveCoins = 250;
+  eq(buyCosmetic(s, 'pip-moon', NOW).ok, true);
+  eq(s.wallet.graveCoins, 150);
+  eq(buyCosmetic(s, 'pip-moon', NOW).reason, 'owned', 'a double tap cannot deduct twice');
+  eq(s.wallet.graveCoins, 150);
+  eq(buyCosmetic(s, 'pip-default', NOW).ok, false);
+  eq(buyCosmetic(s, 'nope', NOW).ok, false);
+});
+
+test('Equip: needs ownership, fills its own slot, and defaults are always available', () => {
+  const s = defaultSave();
+  eq(equipCosmetic(s, 'pip-moon').reason, 'locked');
+  s.ownedCosmeticIds.push('pip-moon', 'scythe-moon');
+  eq(equipCosmetic(s, 'pip-moon').ok, true);
+  eq(equipCosmetic(s, 'scythe-moon').ok, true);
+  eq(s.equippedByCampaign.keeper.appearance, 'pip-moon');
+  eq(s.equippedByCampaign.keeper.weapon, 'scythe-moon');
+  eq(s.equippedByCampaign.survivor.appearance, 'mara-default', 'Pip gear never touches Mara');
+  eq(equipCosmetic(s, 'pip-default').ok, true);
+});
+
+test('Cosmetics: every shop item has a real, distinct art change', () => {
+  for (const c of COSMETICS.filter((x) => x.cost > 0)) assert(Object.keys(c.skin).length > 0, `${c.id} changes nothing`);
+});
+
+test('Upgrades: prices and levels follow the catalog; a repeated confirm buys one level', () => {
+  const s = defaultSave();
+  s.wallet.graveCoins = 500;
+  eq(buyUpgrade(s, 'pulseRecovery', 0, NOW).spent, 100);
+  eq(buyUpgrade(s, 'pulseRecovery', 0, NOW).reason, 'stale', 'same confirm twice');
+  eq(s.wallet.graveCoins, 400);
+  eq(buyUpgrade(s, 'pulseRecovery', 1, NOW).spent, 180);
+  eq(buyUpgrade(s, 'pulseRecovery', 2, NOW).reason, 'max');
+  eq(s.wallet.graveCoins, 220);
+  const poor = defaultSave();
+  eq(buyUpgrade(poor, 'soulReach', 0, NOW).reason, 'funds');
+});
+
+test('Upgrades: each level produces its displayed value in the run snapshot', () => {
+  const s = defaultSave();
+  const at = (id, level) => { s.upgradeLevels[id] = level; return runLoadout(s); };
+  eq(at('pulseRecovery', 0).keeper.pulseCooldown, 18);
+  eq(at('pulseRecovery', 1).keeper.pulseCooldown, 16);
+  eq(at('pulseRecovery', 2).keeper.pulseCooldown, 14);
+  eq(at('soulReach', 2).keeper.soulReach, 1.3);
+  eq(at('distractRecovery', 2).survivor.distractCooldown, 18);
+  eq(at('lastingRattle', 1).survivor.distractDuration, 3.5);
+  const snap = runLoadout(s);
+  s.upgradeLevels.pulseRecovery = 0;
+  eq(snap.keeper.pulseCooldown, 14, 'a later menu change cannot alter a started run');
+});
+
+test('Soul Reach: the longer radius really collects from further away', () => {
+  const near = (reach) => {
+    const run = createKeeperRun(1, { soulReach: reach });
+    run.queue = 0; run.spawnTimer = 1e9;
+    run.player.x = 3.5; run.player.y = 15.5;
+    run.souls.push({ id: 7, x: 3.5 + KEEPER.soulPickup * 1.1, y: 15.5, born: 0 });
+    stepKeeper(run, IDLE, DT);
+    return run.stats.souls;
+  };
+  eq(near(1), 0);
+  eq(near(1.15), 1);
+});
+
+// ---------------- Achievements, missions ----------------
+
+test('Achievements: states progress, claim pays once, and locked claims are refused', () => {
+  const s = defaultSave();
+  const def = ACHIEVEMENTS.find((a) => a.id === 'soul-guide');
+  eq(achievementStatus(s, def).state, 'locked');
+  eq(claimAchievement(s, 'soul-guide', NOW).ok, false);
+  commitRun(s, keeperSummary({ id: 'a', souls: 20 }), NOW);
+  eq(achievementStatus(s, def).state, 'progress');
+  eq(achievementStatus(s, def).progress, 20);
+  commitRun(s, keeperSummary({ id: 'b', souls: 40 }), NOW);
+  eq(achievementStatus(s, def).state, 'unclaimed');
+  const before = s.wallet.graveCoins;
+  eq(claimAchievement(s, 'soul-guide', NOW).amount, 30);
+  eq(claimAchievement(s, 'soul-guide', NOW).reason, 'claimed');
+  eq(s.wallet.graveCoins, before + 30);
+});
+
+test('Achievements: wins, flawless wins and Both Sides read committed results', () => {
+  const s = defaultSave();
+  const st = (id) => achievementStatus(s, ACHIEVEMENTS.find((a) => a.id === id)).state;
+  commitRun(s, keeperSummary({ id: 'a', result: 'victory', breaches: 1 }), NOW);
+  eq(st('night-keeper'), 'unclaimed');
+  eq(st('sealed-tight'), 'locked', 'a breach rules out Sealed Tight');
+  commitRun(s, keeperSummary({ id: 'b', result: 'victory', breaches: 0 }), NOW);
+  eq(st('sealed-tight'), 'unclaimed');
+  eq(st('both-sides'), 'progress');
+  commitRun(s, survivorSummary({ id: 'c', result: 'victory', tasks: 3 }), NOW);
+  eq(st('still-here'), 'unclaimed');
+  eq(st('both-sides'), 'unclaimed');
+});
+
+test('Missions: partial progress is kept across runs and each claims once', () => {
+  const s = defaultSave();
+  const def = MISSIONS.find((m) => m.id === 'free-souls');
+  commitRun(s, keeperSummary({ id: 'a', souls: 6 }), NOW);
+  eq(missionStatus(s, def).progress, 6);
+  eq(claimMission(s, 'free-souls', NOW).ok, false);
+  commitRun(s, keeperSummary({ id: 'b', souls: 6 }), NOW);
+  eq(claimMission(s, 'free-souls', NOW).amount, 20);
+  eq(claimMission(s, 'free-souls', NOW).reason, 'claimed');
+});
+
+// ---------------- Daily ----------------
+
+test('Daily: one claim per UTC day, in track order, wrapping after step 7, with no reset on a gap', () => {
+  const s = defaultSave();
+  const day = (d, h = 12) => Date.UTC(2026, 10, d, h);
+  eq(claimDaily(s, day(1)).amount, 10);
+  eq(claimDaily(s, day(1, 23)).reason, 'claimed');
+  eq(dailyStatus(s, Date.UTC(2026, 10, 1, 23, 59, 59)).state, 'claimed');
+  eq(dailyStatus(s, Date.UTC(2026, 10, 2, 0, 0, 0)).state, 'ready', 'rolls over exactly at UTC midnight');
+  eq(claimDaily(s, day(2)).amount, 15);
+  eq(claimDaily(s, day(20)).amount, 20, 'missing days keeps the place');
+  for (const [d, amount] of [[21, 25], [22, 30], [23, 40], [24, 60], [25, 10]]) eq(claimDaily(s, day(d)).amount, amount);
+});
+
+test('Daily: a clock moved backward cannot claim again until the date catches up', () => {
+  const s = defaultSave();
+  const day = (d) => Date.UTC(2026, 10, d, 12);
+  claimDaily(s, day(10));
+  eq(claimDaily(s, day(9)).reason, 'clock');
+  eq(s.wallet.graveCoins, 10);
+  eq(claimDaily(s, day(10)).reason, 'claimed');
+  eq(claimDaily(s, day(11)).ok, true);
+  eq(nextResetMs(day(10)), Date.UTC(2026, 10, 11));
+});
+
+// ---------------- Journal ----------------
+
+test('Night Journal: tiers unlock by XP, claim independently, pay once, and award the badge', () => {
+  const s = defaultSave();
+  eq(claimJournalTier(s, 'tier-1', NOW).reason, 'locked');
+  s.nightJournal.xp = 130;
+  eq(journalTierStatus(s, JOURNAL_TIERS[1]), 'unclaimed');
+  eq(claimJournalTier(s, 'tier-2', NOW).amount, 30);
+  eq(claimJournalTier(s, 'tier-2', NOW).reason, 'claimed');
+  eq(claimJournalTier(s, 'tier-1', NOW).amount, 20, 'tiers need not be claimed in order');
+  eq(hasJournalBadge(s), false);
+  s.nightJournal.xp = 500;
+  const t5 = claimJournalTier(s, 'tier-5', NOW);
+  eq(t5.amount, 80); eq(t5.badge, 'Journal Keeper');
+  eq(hasJournalBadge(s), true);
+  eq(s.wallet.graveCoins, 130);
+  eq(s.nightJournal.xp, 500, 'claims earn no XP');
+});
+
+test('Badges: count only what can really be claimed, and opening screens changes nothing', () => {
+  const s = defaultSave();
+  eq(claimableCounts(s, NOW).total, 1, 'only today\'s daily');
+  claimDaily(s, NOW);
+  eq(claimableCounts(s, NOW).total, 0);
+  commitRun(s, keeperSummary({ souls: 1 }), NOW);
+  eq(claimableCounts(s, NOW).achievements, 1);
+  eq(claimableCounts(s, NOW).achievements, 1);
+});
+
+// ---------------- Event ----------------
+
+test('Event: first clear pays 50 once; replays pay nothing; standard progress is untouched', () => {
+  const s = defaultSave();
+  const ev = (o) => keeperSummary({ campaign: 'keeper', eventId: 'keepers-trial', souls: 14, seals: 2, ...o });
+  const lose = commitRun(s, ev({ id: 'e0' }), NOW);
+  eq(lose.coins, 0, 'a lost event pays nothing');
+  const first = commitRun(s, ev({ id: 'e1', result: 'victory', score: 900 }), NOW);
+  eq(first.coins, 50);
+  const replay = commitRun(s, ev({ id: 'e2', result: 'victory', score: 1200 }), NOW);
+  eq(replay.coins, 0);
+  eq(s.wallet.graveCoins, 50);
+  eq(s.events.bestByEvent['keepers-trial'], 1200);
+  eq(s.events.completedIds.join(), 'keepers-trial');
+  eq(s.lifetimeStats.souls, 0); eq(s.lifetimeStats.keeperWins, 0);
+  eq(s.missionProgress.souls, 0); eq(s.nightJournal.xp, 0);
+  eq(s.records.keeperBest, null); eq(s.records.completions.keeper, 0);
+  eq(s.records.recentRuns[0].eventId, 'keepers-trial');
+});
+
+test('Event: the Trial run has 6 and 8 undead with no upgrades, and leaves standard rules alone', () => {
+  const s = defaultSave();
+  s.upgradeLevels.pulseRecovery = 2; s.upgradeLevels.soulReach = 2;
+  const lo = runLoadout(s, 'keepers-trial');
+  eq(lo.keeper.pulseCooldown, 18); eq(lo.keeper.soulReach, 1);
+  eq(lo.upgrades.pulseRecovery, 0);
+  const run = createKeeperRun(3, lo.keeper);
+  eq(run.rules.waves.map((w) => w.count).join(), '6,8');
+  eq(run.queue, 6);
+  eq(createKeeperRun(3).rules.waves.map((w) => w.count).join(), '4,6,8');
+  eq(KEEPER.waves.map((w) => w.count).join(), '4,6,8');
+  eq(run.health, 3);
+});
+
+test('Event: the Trial can be played through to a win on its two waves', () => {
+  const run = createKeeperRun(21, runLoadout(defaultSave(), 'keepers-trial').keeper);
+  playPerfectKeeper(run);
+  eq(run.outcome?.result, 'victory');
+  eq(run.stats.seals, 2);
+  eq(run.stats.defeated + run.breaches, 14);
+});
+
+// ---------------- Skills ----------------
+
+test('Soul Pulse: pushes nearby undead, deals no damage, and goes on cooldown', () => {
+  const run = quiet(createKeeperRun(30));
+  run.player.x = 5.5; run.player.y = 15.5;
+  const close = activeEnemy(run, 6.3, 15.5), far = activeEnemy(run, 10.5, 15.5);
+  const ev = stepKeeper(run, { x: 0, y: 0, skill: true }, DT);
+  eq(ev.find((e) => e.type === 'pulse').pushed, 1);
+  eq(run.skillCooldown, 18);
+  for (let i = 0; i < 20; i++) stepKeeper(run, IDLE, DT);
+  assert(close.x > 7, `pushed away, x=${close.x}`);
+  eq(far.push ?? null, null);
+  eq(run.enemies.length, 2, 'no damage'); eq(run.stats.defeated, 0); eq(run.score, 0);
+  eq(run.invuln, 0, 'grants no invulnerability');
+});
+
+test('Soul Pulse: cooldown runs on simulation time, starts ready, and blocks reuse', () => {
+  const run = quiet(createKeeperRun(31, { pulseCooldown: 14 }));
+  eq(run.skillCooldown, 0);
+  stepKeeper(run, { x: 0, y: 0, skill: true }, DT);
+  eq(run.skillCooldown, 14);
+  const held = run.skillCooldown;
+  const ev = stepKeeper(run, { x: 0, y: 0, skill: true }, DT);
+  eq(ev.filter((e) => e.type === 'pulse').length, 0);
+  assert(run.skillCooldown < held);
+  const paused = run.skillCooldown; // paused means no steps run, so it holds
+  eq(run.skillCooldown, paused);
+  for (let i = 0; i < 60 * 15; i++) stepKeeper(run, IDLE, DT);
+  eq(run.skillCooldown, 0);
+});
+
+test('Soul Pulse: undead are never shoved into walls, off the map or through the gate', () => {
+  const run = quiet(createKeeperRun(32));
+  // Stand above an undead pressed against the closed gate, then shove it downward.
+  run.player.x = 6.5; run.player.y = 16.6;
+  const atGate = activeEnemy(run, 6.5, 17.6);
+  const atWall = activeEnemy(run, 5.5, 16.5); // a wall stands left of the opening on row 16
+  stepKeeper(run, { x: 0, y: 0, skill: true }, DT);
+  for (let i = 0; i < 20; i++) {
+    stepKeeper(run, IDLE, DT);
+    run.invuln = 1;
+    if (atGate.push) { assert(atGate.y + atGate.r <= run.gate.r + 1e-6 || Math.floor(atGate.x) !== run.gate.c, `in gate at y=${atGate.y}`); }
+    for (const e of [atGate, atWall]) assert(!isSolid(run.map, Math.floor(e.x), Math.floor(e.y)), `in solid tile at ${e.x},${e.y}`);
+  }
+  eq(run.breaches, 0, 'a shove is not a breach');
+});
+
+test('Soul Pulse: a pushed undead resumes its walk and can still reach the gate', () => {
+  const run = quiet(createKeeperRun(33));
+  run.player.x = 6.5; run.player.y = 13.5;
+  const e = activeEnemy(run, 7.2, 13.5);
+  e.speed = 2;
+  stepKeeper(run, { x: 0, y: 0, skill: true }, DT);
+  for (let i = 0; i < 60 * 30 && !run.breaches; i++) { run.invuln = 1; run.player.x = 1.5; run.player.y = 1.5; stepKeeper(run, IDLE, DT); }
+  eq(run.breaches, 1);
+});
+
+const clearStart = (run) => { run.zombies = []; return run; };
+
+test('Distraction: lands 2 tiles ahead on open street, and stops short of walls', () => {
+  const run = clearStart(createSurvivorRun());
+  run.player.x = 3.5; run.player.y = 13.5; run.player.fx = 1; run.player.fy = 0;
+  const open = distractionLanding(run);
+  assert(Math.abs(open.x - 5.5) < 0.06, `x=${open.x}`);
+  // Row 9 is open, walls lie above: face the building from one tile away.
+  run.player.x = 2.5; run.player.y = 9.5; run.player.fx = 0; run.player.fy = -1;
+  eq(distractionLanding(run), null, 'a wall right ahead leaves no room');
+  run.player.x = 1.5; run.player.y = 9.5;
+  const blocked = distractionLanding(run);
+  assert(blocked.y > 6.9 && !isSolid(run.map, Math.floor(blocked.x), Math.floor(blocked.y)), `y=${blocked.y}`);
+});
+
+test('Distraction: with no room it explains why and does not spend the cooldown', () => {
+  const run = clearStart(createSurvivorRun());
+  run.player.x = 2.5; run.player.y = 9.5; run.player.fx = 0; run.player.fy = -1;
+  const ev = stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
+  assert(ev.some((e) => e.type === 'skillDenied'));
+  eq(run.skillCooldown, 0);
+  eq(run.noise, null);
+});
+
+test('Distraction: zombies in earshot investigate for the set time, then return to patrol', () => {
+  const run = createSurvivorRun({ distractDuration: 3 });
+  const z = run.zombies[2]; // row 9 patrol
+  run.zombies = [z];
+  z.x = 2.5; z.y = 9.5; z.wp = 1;
+  run.player.x = 6.5; run.player.y = 9.5; run.player.fx = -1; run.player.fy = 0; // lands at x=4.5
+  stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
+  eq(z.state, 'investigate');
+  eq(run.skillCooldown, 22);
+  run.player.x = 6.5; run.player.y = 23.5; // well out of sight
+  for (let i = 0; i < 60 * 2.5; i++) stepSurvivor(run, IDLE, DT);
+  eq(z.state, 'investigate');
+  assert(Math.abs(z.x - 4.5) < 1.2, `walked to the noise, x=${z.x}`);
+  for (let i = 0; i < 60; i++) stepSurvivor(run, IDLE, DT);
+  assert(z.state === 'return' || z.state === 'patrol', `state ${z.state}`);
+  for (let i = 0; i < 60 * 15 && z.state !== 'patrol'; i++) stepSurvivor(run, IDLE, DT);
+  eq(z.state, 'patrol');
+});
+
+test('Distraction: Lasting Rattle lasts longer, and zombies out of earshot ignore it', () => {
+  const run = createSurvivorRun({ distractDuration: 4 });
+  const z = run.zombies[2];
+  const far = run.zombies[0];
+  run.zombies = [z, far];
+  z.x = 2.5; z.y = 9.5;
+  run.player.x = 6.5; run.player.y = 9.5; run.player.fx = -1; run.player.fy = 0;
+  stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
+  run.player.x = 6.5; run.player.y = 23.5;
+  for (let i = 0; i < 60 * 3.5; i++) stepSurvivor(run, IDLE, DT);
+  eq(z.state, 'investigate');
+  eq(far.state, 'patrol');
+});
+
+test('Distraction: a zombie that can see Mara keeps chasing; one that spots her mid-check chases', () => {
+  const run = createSurvivorRun();
+  const z = run.zombies[2];
+  run.zombies = [z];
+  z.x = 4.5; z.y = 9.5;
+  run.player.x = 6.5; run.player.y = 9.5; run.player.fx = 1; run.player.fy = 0;
+  stepSurvivor(run, IDLE, DT);
+  eq(z.state, 'chase');
+  stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
+  eq(z.state, 'chase', 'not invisibility');
+  const run2 = createSurvivorRun();
+  const y = run2.zombies[2];
+  run2.zombies = [y];
+  y.x = 2.5; y.y = 9.5;
+  run2.player.x = 6.5; run2.player.y = 9.5; run2.player.fx = -1; run2.player.fy = 0;
+  stepSurvivor(run2, { x: 0, y: 0, skill: true }, DT);
+  eq(y.state, 'investigate');
+  run2.player.x = y.x + 2; run2.player.y = y.y;
+  stepSurvivor(run2, IDLE, DT);
+  eq(y.state, 'chase');
+});
+
+test('Skills: neither changes the core loss rules', () => {
+  const k = quiet(createKeeperRun(40));
+  stepKeeper(k, { x: 0, y: 0, skill: true }, DT);
+  eq(k.health, 3); eq(KEEPER.maxHealth, 3); eq(KEEPER.maxBreaches, 3);
+  const s = createSurvivorRun();
+  stepSurvivor(s, { x: 0, y: 0, skill: true }, DT);
+  s.zombies[0].x = s.player.x; s.zombies[0].y = s.player.y;
+  stepSurvivor(s, IDLE, DT);
+  eq(s.outcome?.result, 'defeat', 'one touch still loses');
+});
+
+// ---------------- Shared leaderboard ----------------
+
+const ID = 'abcdef12-3456-7890-abcd-ef1234567890';
+const winRun = (over = {}) => ({ score: 1380, time: 90, defeated: 18, souls: 18, seals: 3, health: 3, breaches: 0, result: 'victory', ...over });
+
+// Tiny stand-in for D1 that follows the same SQL intent.
+function fakeDb() {
+  const rows = new Map();
+  const sorted = () => [...rows.values()].sort((a, b) => b.score - a.score || a.time_s - b.time_s || a.created_at - b.created_at);
+  const db = async (sql, p) => {
+    if (sql.startsWith('INSERT')) {
+      const [player_id, name, score, time_s, created_at] = p;
+      const old = rows.get(player_id);
+      if (!old || score > old.score || (score === old.score && time_s < old.time_s)) rows.set(player_id, { player_id, name, score, time_s, created_at });
+      return [];
+    }
+    if (sql.includes('COUNT')) return [{ rank: 1 + sorted().filter((r) => r.score > p[0] || (r.score === p[1] && r.time_s < p[2])).length }];
+    if (sql.includes('WHERE player_id')) return rows.has(p[0]) ? [rows.get(p[0])] : [];
+    return sorted().slice(0, 10);
+  };
+  db.rows = rows;
+  return db;
+}
+
+test('Leaderboard names: valid names pass; long, odd and rude ones are refused', () => {
+  eq(cleanName('  Mossy  Pip ').name, 'Mossy Pip');
+  eq(cleanName('Pip_99-x').ok, true);
+  eq(cleanName('').ok, false);
+  eq(cleanName('ThisNameIsWayTooLong').ok, false);
+  eq(cleanName('<b>pip</b>').ok, false);
+  eq(cleanName('sh1t head').ok, false, 'undoes letter swaps');
+  eq(cleanName('FUCK').ok, false);
+  eq(cleanName('Peacock').ok, true, 'innocent words stay allowed');
+  eq(cleanName('Grape Ape').ok, true);
+  eq(cleanName('big cock').ok, false);
+});
+
+test('Leaderboard runs: a real result passes; forged or impossible ones are refused', () => {
+  eq(checkRun(winRun()), null);
+  eq(checkRun({ score: 35, time: 20, defeated: 1, souls: 1, seals: 0, health: 0, breaches: 1, result: 'defeat' }), null);
+  assert(checkRun(winRun({ score: 999999 })), 'made-up score');
+  assert(checkRun(winRun({ score: 1400, defeated: 20, souls: 18 })), 'more undead than exist');
+  assert(checkRun(winRun({ souls: 17 })), 'totals do not add up');
+  assert(checkRun(winRun({ seals: 2, score: 1280 })), 'a win needs every seal');
+  assert(checkRun(winRun({ time: 5 })), 'faster than undead can rise');
+  assert(checkRun(winRun({ health: 0, score: 1080 })), 'cannot win with no health');
+  assert(checkRun(winRun({ score: 1380.5 })), 'whole numbers only');
+  assert(checkRun(null));
+});
+
+test('Leaderboard rules: the check accepts a score the game really produced', () => {
+  const run = createKeeperRun(55);
+  playPerfectKeeper(run);
+  eq(checkRun({ score: run.score, time: run.time, defeated: run.stats.defeated, souls: run.stats.souls, seals: run.stats.seals, health: run.health, breaches: run.breaches, result: run.outcome.result }), null);
+});
+
+test('Leaderboard API: keeps only each player\'s best, ranks ties by time, returns a top 10', async () => {
+  {
+    const db = fakeDb();
+    const post = (id, run, name = 'Pip') => postScore(db, { playerId: `player-${id}-000000000000`, name, run }, 1000);
+    for (let i = 0; i < 12; i++) await post(i, winRun({ time: 60 + i }));
+    const low = { score: 35, time: 20, defeated: 1, souls: 1, seals: 0, health: 0, breaches: 1, result: 'defeat' };
+    const after = await post(0, low);
+    eq(after.body.you.score, 1380, 'a worse run does not replace the best');
+    eq(db.rows.size, 12, 'one row per player');
+    const board = await getBoard(db, 'player-11-000000000000');
+    eq(board.body.top.length, 10);
+    eq(board.body.top[0].time, 60, 'ties go to the faster run');
+    eq(board.body.you.rank, 12, 'your rank shows even outside the top 10');
+    assert(!JSON.stringify(board.body.top).includes('player-'), 'device ids stay private');
+  }
+});
+
+test('Leaderboard API: bad requests are refused and save nothing', async () => {
+  const db = fakeDb();
+  eq((await postScore(db, { playerId: 'x', name: 'Pip', run: winRun() }, 1)).status, 400);
+  eq((await postScore(db, { playerId: ID, name: 'sh1t', run: winRun() }, 1)).status, 400);
+  eq((await postScore(db, { playerId: ID, name: 'Pip', run: winRun({ score: 5000 }) }, 1)).status, 422);
+  eq((await postScore(db, null, 1)).status, 400);
+  eq(db.rows.size, 0);
+  eq((await postScore(db, { playerId: ID, name: 'Pip', run: winRun() }, 1)).status, 200);
+});
+
+test('Leaderboard client: an outage or missing service reports honestly, and names are escaped', async () => {
+  const down = await fetchBoard(ID, async () => { throw new Error('offline'); });
+  eq(down.ok, false);
+  const missing = await fetchBoard(ID, async () => new Response('<!doctype html>', { status: 404 }));
+  eq(missing.ok, false);
+  const refused = await submitScore(ID, 'Pip', {}, async () => new Response(JSON.stringify({ error: 'Too fast.' }), { status: 422 }));
+  eq(refused.error, 'Too fast.');
+  const html = boardRowsHtml({ top: [{ rank: 1, name: '<img onerror=x>', score: 10 }], you: null });
+  assert(!html.includes('<img'), 'stored names are not trusted as HTML');
+  assert(boardRowsHtml({ top: [], you: null }).includes('No scores yet'));
 });
 
 // ---------------- Report ----------------
 
+await Promise.all(pending);
 const ol = document.getElementById('results');
 for (const r of results) {
   const li = document.createElement('li');
