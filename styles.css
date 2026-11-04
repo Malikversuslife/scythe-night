@@ -16,12 +16,11 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Butcherman", "Impact", "Arial Black", system-ui, sans-serif;
+  --font-display: "Lilita One", "Arial Rounded MT Bold", "Arial Black", system-ui, sans-serif;
   /* Chunky rounded face for buttons, HUD numbers and labels, like the reference kit. */
   --font-chunky: "Lilita One", "Arial Rounded MT Bold", "Arial Black", system-ui, sans-serif;
-  /* Thick dark outline around light text on stone. */
-  --ink-outline: 0 2px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink),
-    1.5px 1.5px 0 var(--ink), -1.5px 1.5px 0 var(--ink), 1.5px -1.5px 0 var(--ink), -1.5px -1.5px 0 var(--ink);
+  /* Soft shadow that keeps light text readable on stone, without a hard outline. */
+  --ink-outline: 0 1px 1px rgba(20, 12, 32, .9), 0 2px 5px rgba(20, 12, 32, .75);
   color-scheme: dark;
 }
 
@@ -836,33 +835,27 @@ button { font: inherit; }
 .grave-btn:hover { filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .5)) drop-shadow(0 0 6px rgba(186, 244, 90, .55)); }
 .grave-btn:active { transform: translateY(3px); filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .5)) brightness(.92); }
 .grave-btn:disabled { filter: grayscale(.8) brightness(.7); cursor: not-allowed; }
-.grave-label {
-  position: absolute !important;
-  width: 1px; height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+/* The tombstones carry only an icon; their names are real text on the empty lower face. */
+.grave-label, .plaque-label {
+  position: absolute;
+  left: 8%; right: 8%; top: 58%;
+  text-align: center;
+  line-height: 1.02;
+  font-family: var(--font-chunky);
+  font-size: 11.5cqw;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-shadow: var(--ink-outline);
+  pointer-events: none;
 }
+.grave-play .grave-label { top: 40%; font-size: 21cqw; color: var(--soul); }
 
 /* If the art can't load, the label appears on plain stone. */
 .grave-btn.no-art { min-height: 58px; border: 3px solid var(--ink); border-radius: 12px; background: var(--stone-mid); }
 .grave-btn.no-art img { display: none; }
-.grave-btn.no-art .grave-label { position: static !important; width: auto; height: auto; clip: auto; font-family: var(--font-chunky); }
+.grave-btn.no-art .grave-label, .grave-btn.no-art .plaque-label { position: static; font-size: 16px; }
 
-.plaque-label {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  line-height: 1.02;
-  font-family: var(--font-chunky);
-  text-transform: uppercase;
-  letter-spacing: .03em;
-  color: var(--text);
-  text-shadow: 0 1px 0 var(--ink), 1px 0 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink);
-}
-.plaque-records .plaque-label { left: 14%; width: 73%; top: 49%; height: 25%; font-size: 9.5cqw; }
-.plaque-journal .plaque-label { left: 17.5%; width: 65%; top: 40%; height: 37%; font-size: 13cqw; }
 
 .badge {
   display: inline-grid;

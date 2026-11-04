@@ -131,7 +131,7 @@ export function createSurvivorRenderer(images) {
     g.fillStyle = 'rgba(12, 5, 28, .42)';
     g.fillRect(x, top, t + 0.5, t + (below ? 0.5 : 0));
     g.strokeStyle = INK;
-    g.lineWidth = Math.max(2, t * 0.06);
+    g.lineWidth = Math.max(1, t * 0.03);
     g.lineCap = 'round';
     g.beginPath();
     const bottom = (r + 1) * t;

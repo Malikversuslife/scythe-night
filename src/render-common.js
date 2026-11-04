@@ -1,6 +1,7 @@
 // Helpers shared by the three-quarter-view campaign renderers.
 
-export const INK = '#181020';
+// Soft dark edge for markers and text, in place of the old solid outline.
+export const INK = 'rgba(24, 16, 32, .5)';
 
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const lerp = (a, b, k) => a + (b - a) * k;

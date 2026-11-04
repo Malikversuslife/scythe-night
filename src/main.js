@@ -58,10 +58,10 @@ const CAMPAIGNS = {
 };
 
 const ICONS = {
-  scythe: '<svg viewBox="0 0 48 48"><path d="M30 6 L14 44" stroke="#181020" stroke-width="7" stroke-linecap="round"/><path d="M30 6 L14 44" stroke="#8a5a2b" stroke-width="3.5" stroke-linecap="round"/><path d="M29 8 C 40 6, 46 16, 42 26 C 39 18, 34 13, 27 13 Z" fill="#e7e3ef" stroke="#181020" stroke-width="3" stroke-linejoin="round"/></svg>',
-  pulse: '<svg viewBox="0 0 48 48" fill="none" stroke-linecap="round"><circle cx="24" cy="24" r="6" fill="#baf45a" stroke="#181020" stroke-width="3"/><circle cx="24" cy="24" r="13" stroke="#181020" stroke-width="6"/><circle cx="24" cy="24" r="13" stroke="#baf45a" stroke-width="3"/><circle cx="24" cy="24" r="20" stroke="#181020" stroke-width="5" stroke-dasharray="6 7"/><circle cx="24" cy="24" r="20" stroke="#baf45a" stroke-width="2.5" stroke-dasharray="6 7"/></svg>',
-  rattle: '<svg viewBox="0 0 48 48" fill="none" stroke-linecap="round"><rect x="15" y="18" width="18" height="24" rx="4" fill="#ffd789" stroke="#181020" stroke-width="3"/><path d="M15 26h18" stroke="#181020" stroke-width="3"/><path d="M12 13c2-3 5-5 8-6M36 13c-2-3-5-5-8-6M24 11V4" stroke="#181020" stroke-width="6"/><path d="M12 13c2-3 5-5 8-6M36 13c-2-3-5-5-8-6M24 11V4" stroke="#ffd789" stroke-width="3"/></svg>',
-  hand: '<svg viewBox="0 0 48 48"><path d="M17 26 V12 a3 3 0 0 1 6 0 V24 V9 a3 3 0 0 1 6 0 V24 V12 a3 3 0 0 1 6 0 V30 c0 8 -5 13 -12 13 c-6 0 -9 -3 -12 -8 l-5 -8 a3 3 0 0 1 5 -3 Z" fill="#ffd789" stroke="#181020" stroke-width="3" stroke-linejoin="round"/></svg>',
+  scythe: '<svg viewBox="0 0 48 48"><path d="M30 6 L14 44" stroke="#2b2433" stroke-width="5" stroke-linecap="round"/><path d="M29 7 C 41 5, 47 16, 43 27 C 39 18, 34 13, 26 14 Z" fill="#e7e3ef"/></svg>',
+  pulse: '<svg viewBox="0 0 48 48" fill="none" stroke="#baf45a" stroke-linecap="round"><circle cx="24" cy="24" r="6" fill="#baf45a" stroke="none"/><circle cx="24" cy="24" r="13" stroke-width="3.5"/><circle cx="24" cy="24" r="20" stroke-width="3" stroke-dasharray="6 7"/></svg>',
+  rattle: '<svg viewBox="0 0 48 48" fill="none" stroke-linecap="round"><rect x="15" y="18" width="18" height="24" rx="5" fill="#ffd789"/><path d="M15 26h18" stroke="#b98a3d" stroke-width="2.5"/><path d="M12 13c2-3 5-5 8-6M36 13c-2-3-5-5-8-6M24 11V4" stroke="#ffd789" stroke-width="3.5"/></svg>',
+  hand: '<svg viewBox="0 0 48 48"><path d="M17 26 V12 a3 3 0 0 1 6 0 V24 V9 a3 3 0 0 1 6 0 V24 V12 a3 3 0 0 1 6 0 V30 c0 8 -5 13 -12 13 c-6 0 -9 -3 -12 -8 l-5 -8 a3 3 0 0 1 5 -3 Z" fill="#ffd789"/></svg>',
 };
 
 // ---------------- Boot ----------------

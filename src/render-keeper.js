@@ -166,12 +166,12 @@ export function createKeeperRenderer(images) {
     // Top face (continues into the next wall row when the tile below is also wall).
     g.fillStyle = pats.top;
     g.fillRect(x, top, t + 0.5, t + (below ? 0.5 : 0));
-    // Knock the bright texture back toward the reference's dusky purple stone.
-    g.fillStyle = 'rgba(28, 14, 46, .38)';
+    // Knock the bright texture back a little, keeping wall tops lighter than the paths.
+    g.fillStyle = 'rgba(28, 14, 46, .14)';
     g.fillRect(x, top, t + 0.5, t + (below ? 0.5 : 0));
-    // Outline the silhouette.
+    // A thin soft edge, so walls separate from the ground without a hard outline.
     g.strokeStyle = INK;
-    g.lineWidth = Math.max(2, t * 0.06);
+    g.lineWidth = Math.max(1, t * 0.03);
     g.lineCap = 'round';
     g.beginPath();
     const bottom = (r + 1) * t;
@@ -286,7 +286,7 @@ export function createKeeperRenderer(images) {
     g.save();
     g.globalAlpha = 1 - Math.max(0, (k - 0.75) / 0.25);
     g.lineCap = 'round';
-    for (const [color, wMul] of [[INK, 1.35], [SOUL, 1], ['#f4ffd9', 0.35]]) {
+    for (const [color, wMul] of [[SOUL, 1], ['#f4ffd9', 0.35]]) {
       for (let i = 0; i < N; i++) {
         const u0 = i / N, u1 = (i + 1) / N;
         const b0 = lerp(tail, head, u0), b1 = lerp(tail, head, u1);
