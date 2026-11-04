@@ -1,7 +1,7 @@
 // Last Survivor v2 renderer: three-quarter view city blocks, generated art, cutout rigs.
 // Buildings rise BLD_H tiles above their footprint; rows are drawn back to front.
 import { SURVIVOR, TASKS, taskIndex, distractionLanding } from './survivor.js';
-import { RIGS, drawRig, pose } from './rig.js';
+import { RIGS, GAITS, drawRig, facingView, pose, undeadPose, undeadRig } from './rig.js';
 import {
   INK, clamp, hash, drawImg, shadow, pool, tilePattern, offscreen,
   occlude, blitVisible, followCamera, createAnimator, drawFloatText,
@@ -35,8 +35,21 @@ export const SURVIVOR_IMAGES = {
   maraBody: 'assets/img/v2/mara-body.png',
   maraArmBack: 'assets/img/v2/mara-arm-back.png',
   maraArmFront: 'assets/img/v2/mara-arm-front.png',
-  maraLegL: 'assets/img/v2/mara-leg-l.png',
-  maraLegR: 'assets/img/v2/mara-leg-r.png',
+  maraLeg: 'assets/img/v2/mara-leg.png',
+  maraSideHead: 'assets/img/v2/mara-side-head.png',
+  maraSideBody: 'assets/img/v2/mara-side-body.png',
+  maraSideArm: 'assets/img/v2/mara-side-arm.png',
+  maraSideArmFront: 'assets/img/v2/mara-side-arm-front.png',
+  maraSideThigh: 'assets/img/v2/mara-side-thigh.png',
+  maraSideShin: 'assets/img/v2/mara-side-shin.png',
+  maraSideFoot: 'assets/img/v2/mara-side-foot.png',
+  maraSideThighFar: 'assets/img/v2/mara-side-thigh-far.png',
+  maraSideShinFar: 'assets/img/v2/mara-side-shin-far.png',
+  maraSideFootFar: 'assets/img/v2/mara-side-foot-far.png',
+  maraBackHead: 'assets/img/v2/mara-back-head.png',
+  maraBackBody: 'assets/img/v2/mara-back-body.png',
+  maraBackArm: 'assets/img/v2/mara-back-arm.png',
+  maraBackLeg: 'assets/img/v2/mara-back-leg.png',
 };
 
 const BLD_H = 0.95;
@@ -207,7 +220,8 @@ export function createSurvivorRenderer(images) {
     const len = 3.2, spread = 1.9;
     g.globalAlpha = 0.32;
     g.save();
-    g.translate(p.x * t, (p.y - 0.15) * t);
+    // Lights are added on top of the scene, so when she faces away the beam starts above her head.
+    g.translate(p.x * t, (p.y - 0.15 - Math.max(0, -p.fy) * 1.25) * t);
     g.rotate(Math.atan2(p.fy, p.fx));
     g.drawImage(cone(), 0, (-spread / 2) * t, len * t, spread * t);
     g.restore();
@@ -355,29 +369,32 @@ export function createSurvivorRenderer(images) {
 
   function drawMara(g, run, t, time, dt, reduced, chasing) {
     const p = run.player;
-    const s = animator.step(p, dt, 13);
+    // This pace suits her run speed: her planted foot moves back about as fast as the ground passes.
+    const s = animator.step(p, dt, 21);
+    s.view = facingView(p.fx, p.fy, s.view);
     if (p.fx < -0.2) s.flip = true;
     else if (p.fx > 0.2) s.flip = false;
     shadow(g, p.x * t, (p.y + 0.32) * t, t * 0.36);
-    const w = Math.sin(s.phase) * s.walk;
     const pz = pose({
       t: reduced ? 0 : time,
-      walk: reduced ? 0 : w,
-      bob: reduced ? 0 : Math.abs(Math.sin(s.phase)) * 9 * s.walk + Math.sin(time * 2) * 2,
+      flow: reduced ? 0 : s.walk,
+      cycle: reduced ? 0 : s.phase,
+      bob: reduced ? 0 : Math.abs(Math.sin(s.phase)) * 5 * s.walk + Math.sin(time * 2) * 1.5 * (1 - s.walk),
       alert: chasing ? 1 : 0,
     });
-    drawRig(g, rigImages, RIGS.mara, pz, p.x * t, (p.y + 0.36) * t, 1.6 * t, { flip: s.flip });
+    const rig = s.view === 'side' ? RIGS.maraSide : s.view === 'back' ? RIGS.maraBack : RIGS.mara;
+    drawRig(g, rigImages, rig, pz, p.x * t, (p.y + 0.36) * t, 1.6 * t, { flip: s.view === 'side' && s.flip });
   }
 
   function drawZombie(g, z, t, time, dt, reduced) {
-    const s = animator.step(z, dt, 8);
+    const kind = z.id % 2 === 0 ? 'zgirl' : 'zombie';
+    const s = animator.step(z, dt, 0, GAITS[kind].perTile);
+    s.view = facingView(z.fx, z.fy, s.view);
     if (z.fx < -0.2) s.flip = true;
     else if (z.fx > 0.2) s.flip = false;
-    const rig = z.id % 2 === 0 ? RIGS.zgirl : RIGS.zombie;
     const x = z.x * t, foot = (z.y + 0.38) * t, h = 1.62 * t;
-    const w = Math.sin(s.phase) * s.walk;
     shadow(g, x, foot - t * 0.04, t * 0.38);
-    drawRig(g, images, rig, pose({ t: reduced ? 0 : time + z.id, walk: reduced ? 0 : w, bob: reduced ? 0 : Math.abs(w) * 8 }), x, foot, h, { flip: s.flip });
+    drawRig(g, images, undeadRig(kind, s.view), undeadPose(time, z.id, s, reduced), x, foot, h, { flip: s.view === 'side' && s.flip });
     if (z.state === 'chase' || z.state === 'search' || z.state === 'investigate') {
       const mark = z.state === 'chase' ? '!' : '?';
       g.font = `900 ${Math.round(t * 0.6)}px system-ui, sans-serif`;

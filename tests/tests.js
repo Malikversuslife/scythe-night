@@ -4,6 +4,8 @@ import { distanceField, isSolid, lineOfSight, moveCircle } from '../src/world.js
 import { sanitize, createStore, defaultSave } from '../src/storage.js';
 import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS } from '../src/catalog.js';
 import { cleanName } from '../src/leaderboard-rules.mjs';
+import { RIGS, GAITS, drawRig, facingView, pose, undeadRig } from '../src/rig.js';
+import { createAnimator } from '../src/render-common.js';
 import { fetchBoard, submitScore } from '../src/leaderboard.js';
 import { boardRowsHtml } from '../src/screens.js';
 import {
@@ -903,6 +905,79 @@ test('Skills: neither changes the core loss rules', () => {
   s.zombies[0].x = s.player.x; s.zombies[0].y = s.player.y;
   stepSurvivor(s, IDLE, DT);
   eq(s.outcome?.result, 'defeat', 'one touch still loses');
+});
+
+// ---------------- Character views ----------------
+
+test('Character views: the drawing follows the direction, and diagonals do not flicker', () => {
+  eq(facingView(0, -1), 'back');
+  eq(facingView(0, 1), 'front');
+  eq(facingView(1, 0), 'side');
+  eq(facingView(-1, 0), 'side');
+  const d = Math.SQRT1_2;
+  eq(facingView(d, d, 'side'), 'side', 'a diagonal keeps the previous view');
+  eq(facingView(d, -d, 'back'), 'back');
+  eq(facingView(0, 0, 'back'), 'back', 'standing still keeps the view');
+});
+
+test('Character views: every Pip costume covers all three views', () => {
+  const keys = new Set([RIGS.reaper, RIGS.reaperSide, RIGS.reaperBack].flatMap((r) => Object.values(r.parts).map((p) => p.img)));
+  for (const c of COSMETICS.filter((x) => x.slot === 'appearance' && x.campaign === 'keeper' && x.cost > 0)) {
+    for (const k of keys) {
+      if (k === 'reaperScythe' || k === 'reaperLantern') continue;
+      assert(c.skin[k], `${c.id} is missing ${k}`);
+    }
+  }
+});
+
+test('Character views: every Mara costume changes her jacket in all three views', () => {
+  const keys = ['maraBody', 'maraArmBack', 'maraArmFront', 'maraSideBody', 'maraSideArm', 'maraSideArmFront', 'maraBackBody', 'maraBackArm'];
+  for (const c of COSMETICS.filter((x) => x.slot === 'appearance' && x.campaign === 'survivor' && x.cost > 0)) {
+    for (const k of keys) assert(c.skin[k], `${c.id} is missing ${k}`);
+  }
+});
+
+test('Zombie strides: a planted foot keeps pace with the ground at patrol and chase speed', () => {
+  for (const [kind, height] of [['zombie', 400], ['zgirl', 420]]) {
+    const g = GAITS[kind], unitsPerTile = height / 1.62;
+    for (const tilesPerSecond of [SURVIVOR.patrolSpeed, SURVIVOR.chaseSpeed, 1.35]) {
+      const radiansPerSecond = g.perTile * tilesPerSecond;
+      const plantedFoot = (2 * g.stride) / (g.planted * ((Math.PI * 2) / radiansPerSecond));
+      const ground = tilesPerSecond * unitsPerTile;
+      assert(Math.abs(plantedFoot - ground) / ground < 0.01, `${kind} foot ${plantedFoot.toFixed(0)} vs ground ${ground.toFixed(0)}`);
+    }
+  }
+});
+
+test('Animator: stepping by distance follows how far a character actually moved', () => {
+  const animator = createAnimator();
+  const e = { x: 0, y: 0 };
+  const first = animator.step(e, 1 / 60, 0, 10).phase;
+  e.x = 0.5;
+  eq(Math.round((animator.step(e, 1 / 60, 0, 10).phase - first) * 100) / 100, 5, 'half a tile at 10 per tile');
+  const still = animator.step(e, 1 / 60, 0, 10).phase;
+  eq(animator.step(e, 1 / 60, 0, 10).phase, still, 'no distance, no stepping');
+});
+
+test('Rigs: each view draws its own art, even when two views share part names', () => {
+  const drawn = [];
+  const ctx = new Proxy({}, { get: (_, k) => (k === 'drawImage' ? (img) => drawn.push(img) : () => {}), set: () => true });
+  const images = new Proxy({}, { get: (_, k) => ({ key: k, width: 8, height: 8 }) });
+  for (const view of ['front', 'side', 'back']) {
+    drawn.length = 0;
+    drawRig(ctx, images, undeadRig('zombie', view), pose(), 0, 0, 100);
+    const head = view === 'side' ? 'zombieSideHead' : view === 'back' ? 'zombieBackHead' : 'zombieHead';
+    assert(drawn.some((i) => i.key === head), `${view} should draw ${head}`);
+  }
+});
+
+test('Mara\'s stride: a planted foot moves back about as fast as the ground passes', () => {
+  // Rig units per second at her run speed, against the planted foot's speed at the game's animation pace.
+  const unitsPerTile = RIGS.mara.height / 1.6;
+  const ground = SURVIVOR.playerSpeed * unitsPerTile;
+  const cycleSeconds = (Math.PI * 2) / 21;
+  const plantedFoot = (2 * 48) / (0.4 * cycleSeconds);
+  assert(Math.abs(plantedFoot - ground) / ground < 0.1, `foot ${plantedFoot.toFixed(0)} vs ground ${ground.toFixed(0)}`);
 });
 
 // ---------------- Shared leaderboard ----------------

@@ -9,7 +9,7 @@
   </style>
 </head>
 <body>
-  <canvas id="c" width="1200" height="900"></canvas>
+  <canvas id="c" width="1200" height="2750"></canvas>
   <script type="module">
     import { RIGS, RIG_IMAGES, drawRig, pose } from '../src/rig.js';
     const images = {};
@@ -21,15 +21,15 @@
     const frozen = params.has('t') ? +params.get('t') : null;
     const poses = [
       ['idle', (t) => pose({ t, bob: Math.sin(t * 2) * 3 })],
-      ['walk', (t) => pose({ t, walk: Math.sin(t * 9), bob: Math.abs(Math.sin(t * 9)) * 10 })],
-      ['wind-up', (t) => pose({ t, swing: 2.4, slashLean: -1 })],
-      ['slash', (t) => pose({ t, swing: -1.0, slashLean: 1 })],
+      ['walk', (t) => pose({ t, walk: Math.sin(t * 9), bob: Math.abs(Math.sin(t * 9)) * 6, flow: 1, cycle: t * 9, drag: 1, lantern: 0.3 + Math.sin(t * 18) * 0.16 })],
+      ['wind-up', (t) => pose({ t, swing: 2.4, slashLean: -1, lunge: -8 })],
+      ['slash', (t) => pose({ t, swing: -1.15, slashLean: 1.2, lunge: 26, sink: 10, drag: 1.5 })],
       ['hurt / alert', (t) => pose({ t, hurt: 1, alert: 1 })],
     ];
     function frame(now) {
       const t = frozen ?? now / 1000;
-      ctx.clearRect(0, 0, 1200, 900);
-      ['reaper', 'zombie', 'zgirl', 'mara'].forEach((name, row) => {
+      ctx.clearRect(0, 0, 1200, 2750);
+      ['reaper', 'reaperSide', 'reaperBack', 'mara', 'maraSide', 'maraBack', 'zombie', 'zombieSide', 'zombieBack', 'zgirl', 'zgirlSide', 'zgirlBack'].forEach((name, row) => {
         poses.forEach(([label, fn], col) => {
           const x = 120 + col * 220, y = 230 + row * 225;
           ctx.fillStyle = 'rgba(0,0,0,.35)';

@@ -3,7 +3,7 @@
 // row is drawn back-to-front with the characters standing in it.
 import { KEEPER } from './keeper.js';
 import { SKILLS } from './catalog.js';
-import { RIGS, drawRig, pose } from './rig.js';
+import { RIGS, GAITS, drawRig, facingView, pose, undeadPose, undeadRig } from './rig.js';
 import {
   INK, clamp, lerp, easeOut, hash, drawImg, shadow, pool, tilePattern, offscreen,
   occlude, blitVisible, followCamera, createAnimator, drawFloatText,
@@ -35,18 +35,46 @@ export const KEEPER_IMAGES = {
   reaperArmFront: 'assets/img/v2/reaper-arm-front.png',
   reaperScythe: 'assets/img/v2/reaper-scythe.png',
   reaperLantern: 'assets/img/v2/reaper-lantern.png',
+  reaperSideHead: 'assets/img/v2/reaper-side-head.png',
+  reaperSideBody: 'assets/img/v2/reaper-side-body.png',
+  reaperSideArm: 'assets/img/v2/reaper-side-arm.png',
+  reaperBackHead: 'assets/img/v2/reaper-back-head.png',
+  reaperBackBody: 'assets/img/v2/reaper-back-body.png',
+  reaperBackArm: 'assets/img/v2/reaper-back-arm.png',
   zombieHead: 'assets/img/v2/zombie-head.png',
   zombieBody: 'assets/img/v2/zombie-body.png',
-  zombieArmL: 'assets/img/v2/zombie-arm-l.png',
-  zombieArmR: 'assets/img/v2/zombie-arm-r.png',
-  zombieLegL: 'assets/img/v2/zombie-leg-l.png',
-  zombieLegR: 'assets/img/v2/zombie-leg-r.png',
+  zombieArm: 'assets/img/v2/zombie-arm.png',
+  zombieLeg: 'assets/img/v2/zombie-leg.png',
+  zombieSideHead: 'assets/img/v2/zombie-side-head.png',
+  zombieSideBody: 'assets/img/v2/zombie-side-body.png',
+  zombieSideArm: 'assets/img/v2/zombie-side-arm.png',
+  zombieSideThigh: 'assets/img/v2/zombie-side-thigh.png',
+  zombieSideShin: 'assets/img/v2/zombie-side-shin.png',
+  zombieSideFoot: 'assets/img/v2/zombie-side-foot.png',
+  zombieSideThighFar: 'assets/img/v2/zombie-side-thigh-far.png',
+  zombieSideShinFar: 'assets/img/v2/zombie-side-shin-far.png',
+  zombieSideFootFar: 'assets/img/v2/zombie-side-foot-far.png',
+  zombieBackHead: 'assets/img/v2/zombie-back-head.png',
+  zombieBackBody: 'assets/img/v2/zombie-back-body.png',
+  zombieBackArm: 'assets/img/v2/zombie-back-arm.png',
+  zombieBackLeg: 'assets/img/v2/zombie-back-leg.png',
   zgirlHead: 'assets/img/v2/zgirl-head.png',
   zgirlBody: 'assets/img/v2/zgirl-body.png',
-  zgirlArmL: 'assets/img/v2/zgirl-arm-l.png',
-  zgirlArmR: 'assets/img/v2/zgirl-arm-r.png',
-  zgirlLegL: 'assets/img/v2/zgirl-leg-l.png',
-  zgirlLegR: 'assets/img/v2/zgirl-leg-r.png',
+  zgirlArm: 'assets/img/v2/zgirl-arm.png',
+  zgirlLeg: 'assets/img/v2/zgirl-leg.png',
+  zgirlSideHead: 'assets/img/v2/zgirl-side-head.png',
+  zgirlSideBody: 'assets/img/v2/zgirl-side-body.png',
+  zgirlSideArm: 'assets/img/v2/zgirl-side-arm.png',
+  zgirlSideThigh: 'assets/img/v2/zgirl-side-thigh.png',
+  zgirlSideShin: 'assets/img/v2/zgirl-side-shin.png',
+  zgirlSideFoot: 'assets/img/v2/zgirl-side-foot.png',
+  zgirlSideThighFar: 'assets/img/v2/zgirl-side-thigh-far.png',
+  zgirlSideShinFar: 'assets/img/v2/zgirl-side-shin-far.png',
+  zgirlSideFootFar: 'assets/img/v2/zgirl-side-foot-far.png',
+  zgirlBackHead: 'assets/img/v2/zgirl-back-head.png',
+  zgirlBackBody: 'assets/img/v2/zgirl-back-body.png',
+  zgirlBackArm: 'assets/img/v2/zgirl-back-arm.png',
+  zgirlBackLeg: 'assets/img/v2/zgirl-back-leg.png',
 };
 
 const WALL_H = 0.55;
@@ -165,24 +193,51 @@ export function createKeeperRenderer(images) {
 
   // ---------------- Animation helpers ----------------
 
-  function reaperPose(run, s, time, reduced) {
-    let swing = 0, lean = 0;
+  // The hit lands the moment the button is pressed, so the swing can't have a slow wind-up:
+  // a quick snap back, a fast strike, a hold, then a settle during the cooldown.
+  function slashMotion(run) {
     const sl = run.slash;
     if (sl) {
       const k = sl.t / KEEPER.slashDuration;
-      if (k < 0.2) { swing = lerp(0, 2.4, k / 0.2); lean = -k / 0.2; }
-      else { const q = easeOut((k - 0.2) / 0.8); swing = lerp(2.4, -1.0, q); lean = lerp(-1, 1, q); }
-    } else if (run.cooldown > 0) {
-      const rest = KEEPER.slashCooldown - KEEPER.slashDuration;
-      const q = clamp(run.cooldown / rest, 0, 1) ** 2;
-      swing = -1.0 * q; lean = q;
+      if (k < 0.12) { const q = k / 0.12; return { swing: lerp(0, 2.4, q), lean: -q, lunge: -8 * q, sink: 0 }; }
+      if (k < 0.42) {
+        const q = easeOut((k - 0.12) / 0.3);
+        return { swing: lerp(2.4, -1.15, q), lean: lerp(-1, 1.2, q), lunge: lerp(-8, 26, q), sink: 10 * q };
+      }
+      return { swing: -1.15, lean: 1.2, lunge: 26, sink: 10 };
     }
+    if (run.cooldown > 0) {
+      const q = clamp(run.cooldown / (KEEPER.slashCooldown - KEEPER.slashDuration), 0, 1) ** 2;
+      return { swing: -1.15 * q, lean: 1.2 * q, lunge: 26 * q, sink: 10 * q };
+    }
+    return { swing: 0, lean: 0, lunge: 0, sink: 0 };
+  }
+
+  // A soft spring: the value overshoots its target and settles, like cloth or a hanging lantern.
+  function spring(s, key, target, dt, stiffness, damping) {
+    const v = (s[key + 'V'] ?? 0) + ((target - (s[key] ?? 0)) * stiffness - (s[key + 'V'] ?? 0) * damping) * dt;
+    s[key + 'V'] = v;
+    s[key] = (s[key] ?? 0) + v * dt;
+    return s[key];
+  }
+
+  function reaperPose(run, s, time, dt, reduced) {
+    const { swing, lean, lunge, sink } = slashMotion(run);
     const w = Math.sin(s.phase) * s.walk;
+    const h = Math.min(dt, 1 / 30);
+    const side = s.view === 'side';
+    // Moving, or lunging into a slash, pulls the hem and lantern back behind Pip.
+    const drag = spring(s, 'drag', s.walk + (lunge > 0 ? 0.7 : 0), h, 60, 9);
+    const lantern = spring(s, 'lantern', (side ? 0.3 * s.walk : 0) + Math.sin(s.phase * 2) * 0.16 * s.walk, h, 70, 7);
     return pose({
       t: reduced ? 0 : time,
       walk: reduced ? 0 : w,
-      bob: reduced ? 0 : Math.abs(Math.sin(s.phase)) * 10 * s.walk + Math.sin(time * 2) * 2,
-      swing, slashLean: lean,
+      bob: reduced ? 0 : Math.abs(Math.sin(s.phase)) * 6 * s.walk + Math.sin(time * 2) * 1.5,
+      flow: reduced ? 0 : s.walk,
+      cycle: s.phase,
+      drag: reduced ? 0 : drag,
+      lantern: reduced ? 0 : lantern,
+      swing, slashLean: lean, lunge, sink,
       hurt: run.invuln > KEEPER.invulnTime - 0.3 ? 1 : 0,
     });
   }
@@ -254,7 +309,7 @@ export function createKeeperRenderer(images) {
     for (const s of run.souls) light(s.x, s.y - 0.3, 1.1, '170, 240, 90', 0.3);
     if (run.seal) light(run.seal.x, run.seal.y, 1.6, '170, 240, 90', 0.35);
     for (const s of run.spawns) light(s.c + 0.5, s.r + 0.6, 1.0, '150, 90, 220', 0.25);
-    light(run.player.x + (animator.get(run.player)?.flip ? 0.5 : -0.5), run.player.y - 0.2, 1.4, lanternGlow, 0.16);
+    light(run.player.x + (animator.get(run.player)?.lanternX ?? 0.35), run.player.y - 0.2, 1.4, lanternGlow, 0.16);
     g.restore();
   }
 
@@ -367,12 +422,16 @@ export function createKeeperRenderer(images) {
   function drawReaper(g, run, t, time, dt, reduced) {
     const p = run.player;
     const s = animator.step(p, dt, 13);
-    if (p.fx > 0.2) s.flip = true;
-    else if (p.fx < -0.2) s.flip = false;
+    s.view = facingView(p.fx, p.fy, s.view);
+    if (p.fx > 0.2) s.flip = false;
+    else if (p.fx < -0.2) s.flip = true;
+    // The lantern hand depends on the view: ahead of Pip from the side, and opposite sides front and back.
+    s.lanternX = s.view === 'side' ? (s.flip ? -0.45 : 0.45) : s.view === 'back' ? -0.35 : 0.35;
     shadow(g, p.x * t, (p.y + 0.32) * t, t * 0.42);
     let alpha = 1;
     if (run.invuln > 0 && !reduced) alpha = Math.floor(time * 12) % 2 ? 0.45 : 1;
-    drawRig(g, rigImages, RIGS.reaper, reaperPose(run, s, time, reduced), p.x * t, (p.y + 0.36) * t, 1.85 * t, { flip: s.flip, alpha });
+    const rig = s.view === 'side' ? RIGS.reaperSide : s.view === 'back' ? RIGS.reaperBack : RIGS.reaper;
+    drawRig(g, rigImages, rig, reaperPose(run, s, time, dt, reduced), p.x * t, (p.y + 0.36) * t, 1.85 * t, { flip: s.view === 'side' && s.flip, alpha });
     if (run.invuln > 0 && reduced) {
       g.strokeStyle = '#ff8a8a';
       g.lineWidth = 3;
@@ -390,14 +449,16 @@ export function createKeeperRenderer(images) {
   }
 
   function drawUndead(g, e, t, time, dt, reduced) {
-    const s = animator.step(e, dt, 8);
+    const kind = e.id % 3 === 0 ? 'zgirl' : 'zombie';
+    const s = animator.step(e, dt, 0, GAITS[kind].perTile);
+    s.view = facingView(e.fx, e.fy, s.view);
     if (e.fx < -0.2) s.flip = true;
     else if (e.fx > 0.2) s.flip = false;
-    const rig = e.id % 3 === 0 ? RIGS.zgirl : RIGS.zombie;
+    const rig = undeadRig(kind, s.view);
+    const flip = s.view === 'side' && s.flip;
     const h = 1.62 * t;
     const x = e.x * t, foot = (e.y + 0.38) * t;
-    const w = Math.sin(s.phase) * s.walk;
-    const p = pose({ t: reduced ? 0 : time + e.id, walk: reduced ? 0 : w, bob: reduced ? 0 : Math.abs(w) * 8 });
+    const p = undeadPose(time, e.id, s, reduced);
     if (e.state === 'rising') {
       // Climb out of the open grave: clip at ground level and slide up.
       const k = 1 - e.rise / KEEPER.spawnWarning;
@@ -405,7 +466,7 @@ export function createKeeperRenderer(images) {
       g.beginPath();
       g.rect(x - t, foot - h * 1.2, t * 2, h * 1.2 - t * 0.12);
       g.clip();
-      drawRig(g, images, rig, p, x, foot + h * (1 - easeOut(k)) * 0.9, h, { flip: s.flip });
+      drawRig(g, images, rig, p, x, foot + h * (1 - easeOut(k)) * 0.9, h, { flip });
       g.restore();
       if (!reduced || Math.floor(time * 4) % 2) {
         g.strokeStyle = '#ff8a8a';
@@ -417,7 +478,7 @@ export function createKeeperRenderer(images) {
       return;
     }
     shadow(g, x, foot - t * 0.04, t * 0.38);
-    drawRig(g, images, rig, p, x, foot, h, { flip: s.flip });
+    drawRig(g, images, rig, p, x, foot, h, { flip });
   }
 
   function drawSoul(g, s, t, time, reduced) {

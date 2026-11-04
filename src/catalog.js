@@ -13,9 +13,13 @@ const cos = (name) => `assets/img/v2/cos/${name}.png`;
 const pipSkin = (id) => ({
   reaperHead: cos(`${id}-head`), reaperBody: cos(`${id}-body`),
   reaperArmBack: cos(`${id}-arm-back`), reaperArmFront: cos(`${id}-arm-front`),
+  reaperSideHead: cos(`${id}-side-head`), reaperSideBody: cos(`${id}-side-body`), reaperSideArm: cos(`${id}-side-arm`),
+  reaperBackHead: cos(`${id}-back-head`), reaperBackBody: cos(`${id}-back-body`), reaperBackArm: cos(`${id}-back-arm`),
 });
 const maraSkin = (id) => ({
   maraBody: cos(`${id}-body`), maraArmBack: cos(`${id}-arm-back`), maraArmFront: cos(`${id}-arm-front`),
+  maraSideBody: cos(`${id}-side-body`), maraSideArm: cos(`${id}-side-arm`), maraSideArmFront: cos(`${id}-side-arm-front`),
+  maraBackBody: cos(`${id}-back-body`), maraBackArm: cos(`${id}-back-arm`),
 });
 
 export const COSMETICS = [

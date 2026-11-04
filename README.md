@@ -72,6 +72,7 @@ assets/img/       art exported from the Figma file
   - Cemetery Keeper: seamless ground and wall textures, gravestones and props, the mausoleum, trees and gate, HUD icons, and effects.
   - Last Survivor: street, rooftop and facade textures, street props, the kiosk, power box, bell and refuge door (with their before and after states), the clock tower, and shop signs.
   - Characters (reaper, Mara, two zombies) are split into parts and animated in code by `src/rig.js`. Preview the rigs at `/tests/rig-preview.html`.
+  - Every character has front, side and back views (for example `mara`, `maraSide`, `maraBack`), chosen from their direction by `facingView`. Costumes in `cos/` cover all three. Zombies step by distance travelled, so their feet keep pace at any speed; `GAITS` holds each one's stride and limp.
 
 All sound is synthesized at runtime, so there are no audio files. The Butcherman heading font loads from Google Fonts (SIL Open Font License) and falls back to a system font if it can't load.
 

@@ -113,13 +113,14 @@ export function createAnimator() {
   const anim = new WeakMap();
   return {
     get: (e) => anim.get(e),
-    step(e, dt, speed) {
+    // `perTile` steps by distance travelled instead, so feet keep pace at any speed.
+    step(e, dt, speed, perTile = 0) {
       let s = anim.get(e);
       if (!s) { s = { phase: Math.random() * 6, walk: 0, flip: false, px: e.x, py: e.y }; anim.set(e, s); }
       const moved = Math.hypot(e.x - s.px, e.y - s.py);
       s.px = e.x; s.py = e.y;
       const moving = moved > 0.0005;
-      if (moving) s.phase += dt * speed;
+      if (moving) s.phase += perTile ? moved * perTile : dt * speed;
       s.walk = lerp(s.walk, moving ? 1 : 0, Math.min(1, dt * 10));
       return s;
     },
