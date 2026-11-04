@@ -292,6 +292,23 @@
       </div>
     </div>
 
+    <!-- Player name -->
+    <div id="overlay-name" class="overlay" role="dialog" aria-modal="true" aria-labelledby="name-title" hidden>
+      <div class="stone-panel overlay-panel">
+        <h2 id="name-title" class="display-title small"><label for="name-input">What's your name?</label></h2>
+        <form id="name-form" class="post-form" novalidate>
+          <div class="post-row">
+            <input id="name-input" type="text" autocomplete="nickname" spellcheck="false" placeholder="Your name" data-autofocus>
+          </div>
+          <p id="name-status" class="fine-print" role="status"></p>
+          <div class="panel-actions">
+            <button id="btn-name-other" class="stone-btn" type="button">Skip</button>
+            <button class="stone-btn primary" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Settings overlay -->
     <div id="overlay-settings" class="overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
       <div class="stone-panel overlay-panel settings-panel">
@@ -316,6 +333,7 @@
             <option value="off">Off (full animation)</option>
           </select>
         </div>
+        <div class="menu-stack"><button id="btn-settings-name" class="stone-btn small" type="button">Your name</button></div>
         <p class="fine-print">Keyboard: move with WASD or arrow keys. Slash with Space or J. Interact with E or Space. Pause with Escape or P.</p>
         <p class="fine-print" data-storage-note hidden>Temporary session: progress and unlocks will not be saved on this device.</p>
         <p class="fine-print">Progress lives in this browser. Clearing browser data removes it.</p>

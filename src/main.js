@@ -109,7 +109,7 @@ async function boot() {
   renderer = createRenderer($('game-canvas'), images);
   screens = createScreens({
     store, images, confirmDialog, openOverlay, closeOverlay, announce,
-    startEvent: (id) => startRun(id),
+    startEvent: (id) => withName(() => startRun(id)),
     refreshGlobal,
     openPage,
     playerId,
@@ -306,7 +306,7 @@ function toggleMute() {
 }
 
 $('btn-menu-sound').addEventListener('click', toggleMute);
-$('btn-menu-play').addEventListener('click', () => { audio.unlockAudio(); audio.startMusic(); audio.sfx.click(); goSelect(); });
+$('btn-menu-play').addEventListener('click', () => { audio.unlockAudio(); audio.startMusic(); audio.sfx.click(); withName(goSelect); });
 $('btn-menu-settings').addEventListener('click', openSettings);
 for (const b of document.querySelectorAll('#screen-menu [data-route]')) {
   b.addEventListener('click', () => { audio.unlockAudio(); audio.sfx.click(); openPage(b.dataset.route); });
@@ -348,6 +348,54 @@ function openSettings() {
   syncSettingsForm();
   openOverlay('overlay-settings');
 }
+
+// ---------------- Player name ----------------
+
+let nameSkipped = false; // asked once per visit, so Skip doesn't nag
+let afterName = null;
+
+// Runs `then` once the player has a name or has chosen to skip this visit.
+function withName(then) {
+  if (store.data.player.name || nameSkipped) then();
+  else askName(then);
+}
+
+function askName(then = null) {
+  afterName = then;
+  $('name-input').value = store.data.player.name;
+  $('name-status').textContent = 'Shown if you post a score to the leaderboard. No account needed.';
+  $('name-status').className = 'fine-print';
+  $('btn-name-other').textContent = then ? 'Skip' : 'Cancel';
+  openOverlay('overlay-name');
+}
+
+function leaveNameStep() {
+  const then = afterName;
+  afterName = null;
+  closeOverlay();
+  then?.();
+}
+
+$('name-input').maxLength = NAME_MAX;
+$('name-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = cleanName($('name-input').value);
+  if (!name.ok) {
+    $('name-status').textContent = `⚠ ${name.reason}`;
+    $('name-status').className = 'warn-line';
+    announce(name.reason);
+    $('name-input').focus();
+    return;
+  }
+  store.update((d) => { d.player.name = name.name; });
+  audio.sfx.click();
+  leaveNameStep();
+});
+$('btn-name-other').addEventListener('click', () => {
+  if (afterName) nameSkipped = true;
+  leaveNameStep();
+});
+$('btn-settings-name').addEventListener('click', () => askName());
 
 function confirmDialog(title, text, yesLabel = 'Yes') {
   return new Promise((resolve) => {
