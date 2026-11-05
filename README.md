@@ -21,7 +21,7 @@ Then open <http://localhost:5173>. Logic tests run at <http://localhost:5173/tes
 
 The top 10 lives in a free Supabase project (`ieijitlqbyiuiwqjxavt`). There is nothing to configure: the game calls two public database functions, `get_leaderboard` and `submit_score`, using Supabase's publishable key, which is safe to ship in the page. The table itself is closed to the public, so device ids stay private. Its definition is in `supabase/leaderboard.sql`.
 
-The table keeps one row per device: a random id, a public name, and that player's best score and time. The database recomputes each score and refuses impossible results, but a browser game can't prove a run really happened, so a determined person could still post a plausible fake.
+Standard Keeper runs post by themselves at the end of a run, once the player has a name. The table keeps one row per device: a random id, a public name, and that player's best score and time. The database recomputes each score and refuses impossible results, but a browser game can't prove a run really happened, so a determined person could still post a plausible fake.
 
 - **Remove a name or score:** delete its row in the Supabase dashboard under Table Editor, `scores`.
 - **If the board says it's unavailable:** free Supabase projects pause after about a week without activity. Restore the project from the Supabase dashboard. The scores are kept.

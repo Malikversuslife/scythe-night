@@ -368,7 +368,7 @@ function withName(then) {
 function askName(then = null) {
   afterName = then;
   $('name-input').value = store.data.player.name;
-  $('name-status').textContent = 'Shown if you post a score to the leaderboard. No account needed.';
+  $('name-status').textContent = 'Shown on the leaderboard with your high score. No account needed.';
   $('name-status').className = 'fine-print';
   $('btn-name-other').textContent = then ? 'Skip' : 'Cancel';
   openOverlay('overlay-name');
@@ -553,6 +553,7 @@ function resume() {
   input.clear();
   lastFrame = performance.now();
   accumulator = 0;
+  renderer.recheck();
   audio.resumeAudio();
   announce('Resumed.');
   $('btn-action').focus({ preventScroll: true });
@@ -606,7 +607,10 @@ function autoPause() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) autoPause();
-  else if (state !== 'paused') audio.resumeAudio();
+  else {
+    renderer?.recheck(); // backgrounded pages are where phones reclaim canvas memory
+    if (state !== 'paused') audio.resumeAudio();
+  }
 });
 window.addEventListener('blur', autoPause);
 
@@ -884,63 +888,81 @@ function showResults(r, win, receipt) {
   $('btn-retry').focus({ preventScroll: true });
 }
 
-// Standard Keeper runs with a score can go on the shared board. Posting is the player's choice.
+// Standard Keeper runs with a score go on the shared board by themselves; the database only
+// keeps a player's best. A name is the one thing needed, so without one the form asks for it.
 function setupPostForm(r) {
   const form = $('post-form');
   const eligible = r.campaign === 'keeper' && !r.loadout.eventId && r.score > 0;
   form.hidden = !eligible;
   if (!eligible) return;
   form.dataset.done = '';
+  form.dataset.sending = '';
+  const name = cleanName(store.data.player.name);
+  if (name.ok) {
+    askForPostName(false);
+    sendScore(r, name.name);
+  } else {
+    askForPostName(true);
+    setPostStatus('Add a name to put your score on the leaderboard. No account needed.', 'fine-print');
+  }
+}
+
+function askForPostName(show) {
+  $('post-row').hidden = !show;
+  if (!show) return;
   $('post-name').value = store.data.player.name;
   $('post-name').disabled = false;
   $('btn-post').disabled = false;
-  $('btn-post').hidden = false;
-  $('post-status').textContent = 'Your name is shown publicly. No account needed.';
-  $('post-status').className = 'fine-print';
 }
 
-$('post-name').maxLength = NAME_MAX;
-$('post-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const r = run, form = $('post-form');
-  if (!r || form.dataset.done || form.dataset.sending) return;
-  const status = $('post-status');
-  const name = cleanName($('post-name').value);
-  if (!name.ok) {
-    status.textContent = `\u26A0 ${name.reason}`;
-    status.className = 'warn-line';
-    announce(name.reason);
-    $('post-name').focus();
-    return;
-  }
+function setPostStatus(text, className) {
+  $('post-status').textContent = text;
+  $('post-status').className = className;
+}
+
+async function sendScore(r, name) {
+  const form = $('post-form');
   form.dataset.sending = '1';
   $('btn-post').disabled = true;
-  status.textContent = 'Posting\u2026';
-  status.className = 'fine-print';
-  const posted = await submitScore(playerId(), name.name, {
+  setPostStatus(`Posting as ${name}\u2026`, 'fine-print');
+  const posted = await submitScore(playerId(), name, {
     score: r.score, time: r.time, defeated: r.stats.defeated, souls: r.stats.souls, seals: r.stats.seals,
     health: Math.max(0, r.health), breaches: Math.min(3, r.breaches), result: r.outcome.result,
   });
+  if (run !== r) return; // the player has already moved on to another run
   form.dataset.sending = '';
   if (!posted.ok) {
-    $('btn-post').disabled = false;
-    status.textContent = `\u26A0 ${posted.error}`;
-    status.className = 'warn-line';
+    // Keep the score reachable: the name may be the problem, or the connection may return.
+    askForPostName(true);
+    $('post-name').value = name;
+    setPostStatus(`\u26A0 ${posted.error}`, 'warn-line');
     announce(posted.error);
     return;
   }
   form.dataset.done = '1';
-  store.update((d) => { d.player.name = name.name; });
-  $('post-name').disabled = true;
-  $('btn-post').hidden = true;
+  store.update((d) => { d.player.name = name; });
+  $('post-row').hidden = true;
   const you = posted.you;
-  const beat = you && you.score > r.score;
-  const message = beat
-    ? `Your earlier ${you.score.toLocaleString()} still stands at #${you.rank}.`
-    : `Posted! You're #${you.rank} on the leaderboard.`;
-  status.textContent = `\u2713 ${message}`;
-  status.className = 'saved-line';
+  const message = you && you.score > r.score
+    ? `Your best of ${you.score.toLocaleString()} stands at #${you.rank}.`
+    : `Posted as ${name}. You're #${you.rank} on the leaderboard.`;
+  setPostStatus(`\u2713 ${message}`, 'saved-line');
   announce(message);
+}
+
+$('post-name').maxLength = NAME_MAX;
+$('post-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const form = $('post-form');
+  if (!run || form.dataset.done || form.dataset.sending) return;
+  const name = cleanName($('post-name').value);
+  if (!name.ok) {
+    setPostStatus(`\u26A0 ${name.reason}`, 'warn-line');
+    announce(name.reason);
+    $('post-name').focus();
+    return;
+  }
+  sendScore(run, name.name);
 });
 
 $('btn-retry').addEventListener('click', () => startRun(run?.loadout.eventId ?? null));
@@ -963,7 +985,21 @@ let lastFrame = performance.now();
 
 function frame(now) {
   requestAnimationFrame(frame);
-  const elapsed = Math.min(0.25, (now - lastFrame) / 1000); // cap so a long hitch can't jump the sim
+  try {
+    tick(now);
+  } catch (err) {
+    // Without this, one error each frame would stop the drawing and look like a frozen game.
+    // Rebuilding the canvas also clears any state the failed draw left behind.
+    console.error('Frame failed; recovering.', err);
+    accumulator = 0;
+    renderer.reset();
+    renderer.resize();
+  }
+}
+
+function tick(now) {
+  // Never negative: a frame's timestamp can be slightly older than a reset of lastFrame.
+  const elapsed = Math.max(0, Math.min(0.25, (now - lastFrame) / 1000)); // cap so a long hitch can't jump the sim
   lastFrame = now;
   if (!run || (state !== 'playing' && state !== 'paused')) return;
   if (!$('overlay-tab').hidden) return;
@@ -1002,7 +1038,7 @@ new ResizeObserver(() => renderer?.resize()).observe($('viewport'));
 
 // Inspection hook for manual testing only: open the game with ?debug.
 if (new URLSearchParams(location.search).has('debug')) {
-  window.__scythe = { get run() { return run; }, get state() { return state; }, store, events: EVENTS, startRun };
+  window.__scythe = { get run() { return run; }, get state() { return state; }, get renderer() { return renderer; }, store, events: EVENTS, startRun };
 }
 
 applySettings();

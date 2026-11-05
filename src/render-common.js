@@ -67,7 +67,42 @@ export function offscreen(w, h, dpr) {
   cv.height = Math.ceil(h * dpr);
   const g = cv.getContext('2d');
   g.scale(dpr, dpr);
+  cv.addEventListener('contextlost', () => { cv.lost = true; });
   return { cv, g };
+}
+
+// Phones can reclaim a cached layer's memory under pressure, or while the page is in the
+// background, and not always with an event. The map would vanish while characters, which are
+// drawn fresh each frame, carry on. So look at one known-solid pixel of each layer now and then.
+const probe = document.createElement('canvas');
+probe.width = probe.height = 1;
+const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+export function layerIsBlank(layer, x, y) {
+  probeCtx.clearRect(0, 0, 1, 1);
+  probeCtx.drawImage(layer, x, y, 1, 1, 0, 0, 1, 1);
+  return probeCtx.getImageData(0, 0, 1, 1).data[3] === 0;
+}
+
+export function createLayerGuard(everyMs = 4000) {
+  let next = 0;
+  return {
+    soon() { next = 0; },
+    // `layers` is a list of { canvas, x, y }, each point being opaque when the layer is intact.
+    isLost(layers, now = performance.now()) {
+      if (now < next) return false;
+      next = now + everyMs;
+      return layers.some((l) => l.canvas.lost || layerIsBlank(l.canvas, l.x, l.y));
+    },
+  };
+}
+
+// Pixel coordinates inside a world-sized layer for a spot on the first tile matching `is`.
+export function firstTilePoint(map, layer, t, is) {
+  const s = layer.width / (map.w * t);
+  for (let r = 0; r < map.h; r++) {
+    for (let c = 0; c < map.w; c++) if (is(map.rows[r][c])) return { x: Math.floor((c + 0.5) * t * s), y: Math.floor((r + 0.2) * t * s) };
+  }
+  return { x: 0, y: 0 };
 }
 
 // After drawing something that stands in `row`, repaint cached occluder cells of later

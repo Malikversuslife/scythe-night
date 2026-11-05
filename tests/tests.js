@@ -5,7 +5,7 @@ import { sanitize, createStore, defaultSave } from '../src/storage.js';
 import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS } from '../src/catalog.js';
 import { cleanName } from '../src/leaderboard-rules.mjs';
 import { RIGS, GAITS, drawRig, facingView, pose, undeadRig } from '../src/rig.js';
-import { createAnimator } from '../src/render-common.js';
+import { createAnimator, createLayerGuard, firstTilePoint, layerIsBlank } from '../src/render-common.js';
 import { fetchBoard, submitScore } from '../src/leaderboard.js';
 import { boardRowsHtml } from '../src/screens.js';
 import {
@@ -947,6 +947,25 @@ test('Zombie strides: a planted foot keeps pace with the ground at patrol and ch
       assert(Math.abs(plantedFoot - ground) / ground < 0.01, `${kind} foot ${plantedFoot.toFixed(0)} vs ground ${ground.toFixed(0)}`);
     }
   }
+});
+
+test('Map layers: a wiped layer is noticed, and checks stay occasional', () => {
+  const layer = document.createElement('canvas');
+  layer.width = layer.height = 40;
+  layer.getContext('2d').fillRect(10, 20, 10, 10);
+  const map = { w: 4, h: 4, rows: ['....', '.#..', '....', '....'] };
+  const point = firstTilePoint(map, layer, 10, (ch) => ch === '#');
+  eq(point.x, 15); eq(point.y, 12);
+  const solid = { x: 15, y: 25 };
+  eq(layerIsBlank(layer, solid.x, solid.y), false);
+  const guard = createLayerGuard(1000);
+  const entry = [{ canvas: layer, ...solid }];
+  eq(guard.isLost(entry, 5000), false, 'an intact layer is fine');
+  layer.width = 40; // setting the size wipes a canvas
+  eq(guard.isLost(entry, 5500), false, 'not checked again yet');
+  eq(guard.isLost(entry, 6100), true, 'the next check notices');
+  guard.soon();
+  eq(guard.isLost(entry, 6101), true, 'soon() checks straight away');
 });
 
 test('Animator: stepping by distance follows how far a character actually moved', () => {

@@ -6,7 +6,7 @@ import { SKILLS } from './catalog.js';
 import { RIGS, GAITS, drawRig, facingView, pose, undeadPose, undeadRig } from './rig.js';
 import {
   INK, clamp, lerp, easeOut, hash, drawImg, shadow, pool, tilePattern, offscreen,
-  occlude, blitVisible, followCamera, createAnimator, drawFloatText,
+  occlude, blitVisible, followCamera, createAnimator, drawFloatText, createLayerGuard, firstTilePoint,
 } from './render-common.js';
 
 export const KEEPER_IMAGES = {
@@ -92,6 +92,7 @@ const LANTERNS = [[4, 4], [8, 4], [4, 10], [8, 10]];
 export function createKeeperRenderer(images) {
   let cache = null; // ground layer for the current tile size
   const animator = createAnimator();
+  const guard = createLayerGuard();
   let rigImages = images, lanternGlow = '150, 230, 80';
   let effects = [];
   let lastTime = 0;
@@ -327,6 +328,11 @@ export function createKeeperRenderer(images) {
     return cv;
   }
 
+  function layers() {
+    if (!cache) return [];
+    return [{ canvas: cache.canvas, x: 1, y: 1 }, { canvas: cache.walls, ...cache.wallPoint }];
+  }
+
   // ---------------- Frame ----------------
 
   function draw(ctx, run, view) {
@@ -338,8 +344,10 @@ export function createKeeperRenderer(images) {
 
     // Zoom so ~7.8 tiles fit across, like the reference; keep a sane size on wide screens.
     const t = clamp(cssW / 7.8, 36, 66);
+    if (cache && guard.isLost(layers())) cache = null;
     if (!cache || cache.t !== t || cache.dpr !== dpr || cache.run !== run) {
       cache = { ...buildGround(run, t, dpr), walls: buildWalls(run, t, dpr), run };
+      cache.wallPoint = firstTilePoint(map, cache.walls, t, (ch) => ch === '#');
       cam.x = cam.y = null;
     }
 
@@ -490,6 +498,8 @@ export function createKeeperRenderer(images) {
   return {
     draw, event,
     reset() { effects = []; cache = null; },
+    recheck() { guard.soon(); },
+    layers,
     setSkin(overrides, glowRgb) { rigImages = { ...images, ...overrides }; lanternGlow = glowRgb || '150, 230, 80'; },
   };
 }

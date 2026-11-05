@@ -43,6 +43,8 @@ export function createRenderer(canvas, images) {
     draw,
     event: (ev, run) => (run?.campaign === 'survivor' ? survivor : keeper).event(ev, run),
     reset: () => { keeper.reset(); survivor.reset(); },
+    recheck: () => { keeper.recheck(); survivor.recheck(); },
+    layers: (run) => (run.campaign === 'keeper' ? keeper : survivor).layers(),
     setSkin: (overrides, glow) => { keeper.setSkin(overrides, glow); survivor.setSkin(overrides); },
   };
 }

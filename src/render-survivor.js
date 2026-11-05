@@ -4,7 +4,7 @@ import { SURVIVOR, TASKS, taskIndex, distractionLanding } from './survivor.js';
 import { RIGS, GAITS, drawRig, facingView, pose, undeadPose, undeadRig } from './rig.js';
 import {
   INK, clamp, hash, drawImg, shadow, pool, tilePattern, offscreen,
-  occlude, blitVisible, followCamera, createAnimator, drawFloatText,
+  occlude, blitVisible, followCamera, createAnimator, drawFloatText, createLayerGuard, firstTilePoint,
 } from './render-common.js';
 
 export const SURVIVOR_IMAGES = {
@@ -75,6 +75,7 @@ const SCENERY = [
 export function createSurvivorRenderer(images) {
   let cache = null;
   const animator = createAnimator();
+  const guard = createLayerGuard();
   let rigImages = images;
   let effects = [];
   let lastTime = 0;
@@ -229,6 +230,11 @@ export function createSurvivorRenderer(images) {
     g.restore();
   }
 
+  function layers() {
+    if (!cache) return [];
+    return [{ canvas: cache.ground, x: 1, y: 1 }, { canvas: cache.blocks, ...cache.blockPoint }];
+  }
+
   // ---------------- Frame ----------------
 
   function draw(ctx, run, view) {
@@ -239,8 +245,10 @@ export function createSurvivorRenderer(images) {
     lastTime = time;
 
     const t = clamp(cssW / 7.8, 36, 66);
+    if (cache && guard.isLost(layers())) cache = null;
     if (!cache || cache.t !== t || cache.dpr !== dpr || cache.run !== run) {
       cache = { ground: buildGround(run, t, dpr), blocks: buildBlocks(run, t, dpr), furniture: streetFurniture(map), t, dpr, run };
+      cache.blockPoint = firstTilePoint(map, cache.blocks, t, (ch) => ch === '#');
       cam.x = cam.y = null;
       bellAt = -10;
     }
@@ -412,6 +420,8 @@ export function createSurvivorRenderer(images) {
   return {
     draw, event,
     reset() { effects = []; cache = null; },
+    recheck() { guard.soon(); },
+    layers,
     setSkin(overrides) { rigImages = { ...images, ...overrides }; },
   };
 }

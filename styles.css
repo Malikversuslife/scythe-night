@@ -1065,6 +1065,7 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 
 .post-form { margin-top: 6px; }
 .post-row { display: flex; gap: 8px; align-items: center; }
+.post-row[hidden] { display: none; }
 .post-row input {
   flex: 1;
   min-width: 0;

@@ -47,7 +47,10 @@ export function unlockAudio() {
   if (c && c.state === 'suspended') c.resume().catch(() => {});
 }
 
-function tone({ freq = 440, type = 'sine', dur = 0.2, vol = 0.5, attack = 0.005, slide = 0, delay = 0, bus = sfxBus }) {
+// Sound is a nicety: a failed note must never interrupt the game.
+const safely = (play) => (options) => { try { play(options); } catch { /* skip this sound */ } };
+
+const tone = safely(({ freq = 440, type = 'sine', dur = 0.2, vol = 0.5, attack = 0.005, slide = 0, delay = 0, bus = sfxBus }) => {
   if (!ctx || ctx.state !== 'running') return;
   const t = ctx.currentTime + delay;
   const o = ctx.createOscillator();
@@ -61,10 +64,10 @@ function tone({ freq = 440, type = 'sine', dur = 0.2, vol = 0.5, attack = 0.005,
   o.connect(g).connect(bus);
   o.start(t);
   o.stop(t + dur + 0.05);
-}
+});
 
 let noiseBuffer = null;
-function noise({ dur = 0.2, vol = 0.4, filter = 1200, q = 1, sweep = 0, type = 'bandpass', delay = 0 }) {
+const noise = safely(({ dur = 0.2, vol = 0.4, filter = 1200, q = 1, sweep = 0, type = 'bandpass', delay = 0 }) => {
   if (!ctx || ctx.state !== 'running') return;
   if (!noiseBuffer) {
     noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -86,7 +89,7 @@ function noise({ dur = 0.2, vol = 0.4, filter = 1200, q = 1, sweep = 0, type = '
   src.connect(f).connect(g).connect(sfxBus);
   src.start(t);
   src.stop(t + dur + 0.05);
-}
+});
 
 export const sfx = {
   slash() { noise({ dur: 0.18, vol: 0.5, filter: 900, sweep: 3500, q: 2 }); },

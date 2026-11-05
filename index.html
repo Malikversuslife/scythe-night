@@ -56,7 +56,7 @@
           <button id="btn-splash-settings" class="stone-btn small" type="button"><img class="btn-icon" src="assets/img/ui/icon-gear.png" alt="">Settings</button>
           <button id="btn-splash-sound" class="stone-btn small" type="button" aria-pressed="false"><img class="btn-icon" src="assets/img/ui/icon-sound.png" alt=""><span>Sound on</span></button>
         </div>
-        <p class="version">Version 4</p>
+        <p class="version">Version 1.4</p>
       </div>
     </section>
 
@@ -64,9 +64,14 @@
     <section id="screen-menu" class="screen screen-menu bg-cemetery" aria-labelledby="menu-title" hidden>
       <header class="topbar">
         <div class="wallet" data-wallet></div>
-        <button id="btn-menu-sound" class="round-btn" type="button" aria-label="Sound on" aria-pressed="true">
-          <img data-sound-icon src="assets/img/ui/icon-sound.png" alt="">
-        </button>
+        <div class="topbar-buttons">
+          <button class="round-btn" type="button" data-route="records" aria-label="Leaderboard">
+            <img src="assets/img/ui/icon-trophy.png" alt="">
+          </button>
+          <button id="btn-menu-sound" class="round-btn" type="button" aria-label="Sound on" aria-pressed="true">
+            <img data-sound-icon src="assets/img/ui/icon-sound.png" alt="">
+          </button>
+        </div>
       </header>
       <h1 id="menu-title" class="menu-logo"><img src="assets/img/title-logo.webp" alt="Scythe Night" draggable="false"></h1>
       <button id="btn-menu-play" class="grave-btn grave-play" type="button">
@@ -209,8 +214,8 @@
         <p id="results-ending" class="results-ending"></p>
         <div id="results-rewards" class="results-rewards"></div>
         <form id="post-form" class="post-form" hidden>
-          <h2 class="panel-heading"><label for="post-name">Post to the leaderboard</label></h2>
-          <div class="post-row">
+          <h2 class="panel-heading"><label for="post-name">Leaderboard</label></h2>
+          <div id="post-row" class="post-row">
             <input id="post-name" type="text" autocomplete="nickname" spellcheck="false" placeholder="Your name">
             <button id="btn-post" class="stone-btn small primary" type="submit">Post</button>
           </div>
