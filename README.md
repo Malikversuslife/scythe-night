@@ -67,7 +67,7 @@ assets/img/       art exported from the Figma file
 - `assets/img/`: menu and v1 art exported from the project's Figma file (splash, story select, sprite and button sheets).
 - `assets/img/menu/`: tombstone buttons with an icon only; their names are real text on the stone.
 - `assets/img/v2/cos/`: cosmetic recolours of the rig parts.
-- `assets/img/ui/`: the stone UI kit, generated without text so labels stay real HTML. It includes stretchable slab buttons, the board frame and winged-skull crest, round buttons, the joystick base, the action button, medallions, and lime icons. Buttons and boards are 9-slice `border-image`s in `styles.css`. Labels use Lilita One from Google Fonts.
+- `assets/img/ui/`: the stone UI kit, generated without text so labels stay real HTML. It includes the winged-skull crest, round buttons, the joystick base, the action button, medallions, and lime icons. Stone buttons, pills and boards are pure CSS (`--slab-bg`, `--pill-bg`, `--board-bg` in `styles.css`), because `border-image` leaves hairline gaps between its slices. Labels use Lilita One from Google Fonts.
 - `assets/img/v2/`: art for both campaigns, generated with Figma AI in the reference style. The source images are in the same Figma file.
   - Cemetery Keeper: seamless ground and wall textures, gravestones and props, the mausoleum, trees and gate, HUD icons, and effects.
   - Last Survivor: street, rooftop and facade textures, street props, the kiosk, power box, bell and refuge door (with their before and after states), the clock tower, and shop signs.

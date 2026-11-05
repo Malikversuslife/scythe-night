@@ -73,13 +73,17 @@ const IMAGE_SRC = {
 };
 const COSMETIC_FILES = [...new Set(COSMETICS.flatMap((c) => Object.values(c.skin)))];
 const MENU_ART = ['play', 'shop', 'characters', 'upgrades', 'settings', 'records', 'achievements', 'missions', 'daily', 'events', 'journal', 'quit'];
-const PRELOAD = [...MENU_ART.map((n) => `assets/img/menu/${n}.png`), 'assets/img/ui/coin.png', 'assets/img/bg-cemetery.jpg', 'assets/img/title-logo.webp', 'assets/img/banner-tap.png',
+const PRELOAD = [...MENU_ART.map((n) => `assets/img/menu/${n}.png`), 'assets/img/ui/coin.png',
+  // The HUD and controls appear the moment a story starts, so they mustn't still be downloading.
+  'assets/img/ui/action.png', 'assets/img/ui/joystick.png', 'assets/img/ui/medallion.png', 'assets/img/ui/round.png', 'assets/img/btn-skull.png',
+  'assets/img/v2/hud-lantern.png', 'assets/img/v2/heart-full.png', 'assets/img/v2/heart-empty.png', 'assets/img/bg-cemetery.jpg', 'assets/img/title-logo.webp', 'assets/img/banner-tap.png',
   'assets/img/banner-select.png', 'assets/img/card-keeper.webp', 'assets/img/card-survivor.webp'];
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    // Decode during loading, so large art doesn't stall the first frame of a story.
+    img.onload = () => Promise.resolve(img.decode?.()).catch(() => {}).then(() => resolve(img));
     img.onerror = () => reject(new Error(src));
     img.src = src;
   });
@@ -332,6 +336,7 @@ const overlayStack = [];
 function openOverlay(id, onClose) {
   const el = $(id);
   overlayStack.push({ el, returnTo: document.activeElement, onClose });
+  el.style.zIndex = 20 + overlayStack.length; // the newest is always on top, whatever its page order
   el.hidden = false;
   focusFirst(el);
 }
@@ -506,6 +511,11 @@ function startRun(eventId = null) {
   accumulator = 0;
   lastFrame = performance.now();
   renderer.resize();
+  // Draw before the browser paints, so the game never appears with an empty world. The first
+  // draw builds the level's map layers, which is slow, so the clock starts after it.
+  updateHud();
+  drawWorld();
+  lastFrame = performance.now();
   audio.resumeAudio();
   audio.startMusic();
   if (campaign === 'keeper') {
@@ -973,6 +983,10 @@ function frame(now) {
     }
   }
   updateHud();
+  drawWorld();
+}
+
+function drawWorld() {
   renderer.draw(run, { time: animTime, reducedMotion: reducedMotion(), insets: viewInsets() });
 }
 
