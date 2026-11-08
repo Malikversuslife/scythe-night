@@ -1,13 +1,14 @@
-import { createKeeperRun, stepKeeper, KEEPER } from '../src/keeper.js';
-import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, distractionLanding, TASKS, PATROLS, SURVIVOR } from '../src/survivor.js';
+import { createKeeperRun, stepKeeper, KEEPER, specialFor, isWraithSolid, slashHits } from '../src/keeper.js';
+import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, distractionLanding, inBeam, TASKS, PATROLS, SURVIVOR, MONSTERS } from '../src/survivor.js';
 import { distanceField, isSolid, lineOfSight, moveCircle } from '../src/world.js';
 import { sanitize, createStore, defaultSave } from '../src/storage.js';
-import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS } from '../src/catalog.js';
+import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS, SKILLS } from '../src/catalog.js';
 import { cleanName } from '../src/leaderboard-rules.mjs';
 import { RIGS, GAITS, drawRig, facingView, pose, undeadRig } from '../src/rig.js';
 import { createAnimator, createLayerGuard, firstTilePoint, layerIsBlank } from '../src/render-common.js';
 import { fetchBoard, submitScore } from '../src/leaderboard.js';
 import { boardRowsHtml } from '../src/screens.js';
+import { nearestInDirection } from '../src/nav.js';
 import {
   commitRun, runLoadout, buyCosmetic, equipCosmetic, buyUpgrade, achievementStatus, claimAchievement,
   missionStatus, claimMission, claimDaily, dailyStatus, nextResetMs, journalTierStatus, claimJournalTier,
@@ -284,12 +285,12 @@ test('Survivor: standing still at the start for 60 s is safe', () => {
 test('Survivor: zombies cannot see through walls', () => {
   const run = createSurvivorRun();
   const z = run.zombies[0];
-  // Row 20 "####.#.#.####": stand at (5,21) under the wall at (5,20) with a zombie at (5,19).
-  z.x = 5.5; z.y = 19.5;
-  run.player.x = 5.5; run.player.y = 21.5;
-  assert(isSolid(run.map, 5, 20));
+  // A building corner at (3,27) stands between the west avenue and the south-west alley.
+  z.x = 1.5; z.y = 27.5;
+  run.player.x = 4.5; run.player.y = 27.5;
+  assert(isSolid(run.map, 3, 27));
   assert(!canSee(run, z), 'saw through a wall');
-  run.player.x = 6.5; run.player.y = 21.5; z.x = 6.5;
+  z.x = 4.5; z.y = 24.5;
   assert(canSee(run, z), 'should see down the open alley');
 });
 
@@ -313,10 +314,10 @@ test('Survivor: tasks cannot be skipped and the refuge stays locked', () => {
   stepSurvivor(run, press, DT);
   eq(run.done.power, false);
   // Walking into the locked door does nothing.
-  run.player.x = 6.5; run.player.y = 2.5;
+  run.player.x = run.door.c + 0.5; run.player.y = run.door.r + 1.5;
   for (let i = 0; i < 60; i++) stepSurvivor(run, { x: 0, y: -1, action: false }, DT);
   assert(!run.outcome, 'entered a locked refuge');
-  assert(run.player.y > 2 + run.player.r - 1e-6, 'walked through locked door');
+  assert(run.player.y > run.door.r + 1 + run.player.r - 1e-6, 'walked through locked door');
 });
 
 test('Survivor: tasks complete once each and the full route wins', () => {
@@ -331,7 +332,7 @@ test('Survivor: tasks complete once each and the full route wins', () => {
     eq(again.filter((e) => e.type === 'task').length, 0, `${t.id} awarded twice`);
   }
   assert(run.doorOpen, 'door opens after bell');
-  run.player.x = 6.5; run.player.y = 2.5;
+  run.player.x = run.door.c + 0.5; run.player.y = run.door.r + 1.5;
   for (let i = 0; i < 60 && !run.outcome; i++) stepSurvivor(run, { x: 0, y: -1, action: false }, DT);
   eq(run.outcome?.result, 'victory');
 });
@@ -346,14 +347,14 @@ test('Survivor: one zombie contact loses', () => {
 
 test('Survivor: a zombie that loses sight gives up after 3 s and returns to patrol', () => {
   const run = createSurvivorRun();
-  run.zombies = [run.zombies[2]]; // row 9 patrol
+  run.zombies = [run.zombies[3]]; // middle avenue patrol
   const z = run.zombies[0];
-  z.x = 6.5; z.y = 9.5;
-  run.player.x = 6.5; run.player.y = 11.5; // straight below through (6,10) '.'
+  z.x = 7.5; z.y = 13.5;
+  run.player.x = 7.5; run.player.y = 15.5; // straight below on open street
   stepSurvivor(run, IDLE, DT);
   eq(z.state, 'chase');
   // Teleport the player far away behind buildings.
-  run.player.x = 1.5; run.player.y = 23.5;
+  run.player.x = 21.5; run.player.y = 31.5;
   for (let i = 0; i < 60 * 3.2; i++) stepSurvivor(run, IDLE, DT);
   assert(z.state === 'return' || z.state === 'patrol', `state ${z.state}`);
   for (let i = 0; i < 60 * 15 && z.state !== 'patrol'; i++) stepSurvivor(run, IDLE, DT);
@@ -364,9 +365,9 @@ test('Survivor: player outruns a chasing zombie', () => {
   assert(SURVIVOR.playerSpeed > SURVIVOR.chaseSpeed);
 });
 
-test('Survivor: an honest run (keyboard pathing, real zombies) can reach the refuge', () => {
-  // Greedy walker on the street grid that waits when a zombie could see the next tile.
-  const run = createSurvivorRun();
+// Greedy walker on the street grid that waits when a zombie could see the next tile. Exported so
+// a run can be replayed from the console with parts of the city switched off.
+export function honestBot(run) {
   const goals = () => {
     const i = TASKS.findIndex((t) => !run.done[t.id]);
     return i >= 0 ? run.objects[TASKS[i].id] : run.door;
@@ -408,17 +409,203 @@ test('Survivor: an honest run (keyboard pathing, real zombies) can reach the ref
       }
     }
     let dx = tx - run.player.x, dy = ty - run.player.y;
+    // A careful player glances back at the stalker when it gets close: the light roots it.
+    const st = run.zombies.find((z) => z.kind === 'stalker' && z.state === 'hunt' && !(z.linger > 0));
+    if (st && Math.hypot(st.x - run.player.x, st.y - run.player.y) < 3.2 &&
+        lineOfSight(run.map, run.player.x, run.player.y, st.x, st.y)) { dx = st.x - run.player.x; dy = st.y - run.player.y; }
     const len = Math.hypot(dx, dy);
     const inp = len < 0.05 ? IDLE : { x: dx / len, y: dy / len, action: false };
     void field;
     stepSurvivor(run, inp, DT);
   }
+  return run;
+}
+
+test('Survivor: an honest run (keyboard pathing, real zombies) can reach the refuge', () => {
+  const run = honestBot(createSurvivorRun());
   if (run.outcome?.result === 'defeat') {
     const z = run.zombies.reduce((a, b) => (Math.hypot(a.x - run.player.x, a.y - run.player.y) < Math.hypot(b.x - run.player.x, b.y - run.player.y) ? a : b));
     window.__botDeath = { t: run.time.toFixed(1), p: [run.player.x.toFixed(1), run.player.y.toFixed(1)], zombie: z.id, zstate: z.state, done: run.done };
   }
   // This is a smoke test of solvability with timing; a careful human does better than this bot.
   assert(run.outcome?.result === 'victory', `bot result: ${run.outcome ? run.outcome.result : 'timeout'}; tasks ${JSON.stringify(run.done)}`);
+});
+
+// ---------------- The worse things ----------------
+
+// A city run with only the named kinds left in it.
+function cityWith(...kinds) {
+  const run = createSurvivorRun();
+  run.zombies = run.zombies.filter((z) => kinds.includes(z.kind));
+  return run;
+}
+const only = (run, kind) => run.zombies.find((z) => z.kind === kind);
+
+test('Stalker: sleeps until the fuse is taken, then hunts Mara', () => {
+  const run = cityWith('stalker');
+  const z = only(run, 'stalker');
+  const at = { x: z.x, y: z.y };
+  for (let i = 0; i < 120; i++) stepSurvivor(run, IDLE, DT);
+  eq(z.state, 'dormant'); eq(z.x, at.x); eq(z.y, at.y);
+  run.done.fuse = true;
+  run.player.x = 17.5; run.player.y = 1.5; run.player.fx = -1; run.player.fy = 0; // facing away from it
+  const d0 = Math.hypot(z.x - run.player.x, z.y - run.player.y);
+  for (let i = 0; i < 60; i++) stepSurvivor(run, IDLE, DT);
+  eq(z.state, 'hunt');
+  assert(Math.hypot(z.x - run.player.x, z.y - run.player.y) < d0 - 1, 'closed in');
+});
+
+test('Stalker: the flashlight roots it, and it stays put a moment after the beam leaves', () => {
+  const run = cityWith('stalker');
+  const z = only(run, 'stalker');
+  run.done.fuse = true;
+  run.player.x = 17.5; run.player.y = 1.5; run.player.fx = 1; run.player.fy = 0; // beam on it
+  stepSurvivor(run, IDLE, DT);
+  const at = { x: z.x, y: z.y };
+  for (let i = 0; i < 90; i++) stepSurvivor(run, IDLE, DT);
+  eq(z.state, 'frozen'); eq(z.x, at.x);
+  assert(inBeam(run, z));
+  run.player.fx = -1; // look away
+  for (let i = 0; i < 30; i++) stepSurvivor(run, IDLE, DT);
+  eq(z.x, at.x, 'lingers after the beam leaves');
+  for (let i = 0; i < 60; i++) stepSurvivor(run, IDLE, DT);
+  assert(z.x < at.x - 0.5, 'moves again once it recovers');
+});
+
+test('Stalker: a long hunt ends with it slinking back to its corner for a while', () => {
+  const run = cityWith('stalker');
+  const z = only(run, 'stalker');
+  run.done.fuse = true;
+  run.player.x = 1.5; run.player.y = 30.5; run.player.fx = 0; run.player.fy = 1;
+  let retreated = false, rehunted = false;
+  for (let i = 0; i < 60 * (MONSTERS.stalker.huntFor + MONSTERS.stalker.restFor + 1) && !run.outcome; i++) {
+    stepSurvivor(run, IDLE, DT);
+    if (z.state === 'retreat') retreated = true;
+    if (retreated && z.state === 'hunt') rehunted = true;
+  }
+  assert(retreated && rehunted, `retreated ${retreated}, hunted again ${rehunted}`);
+});
+
+test('Screamer: its shriek calls nearby zombies to it, and not far ones', () => {
+  const run = cityWith('screamer', 'walker');
+  const s = only(run, 'screamer');
+  s.x = 7.5; s.y = 13.5;
+  const near = run.zombies.find((z) => z.kind === 'walker' && z.route[0].c === 8); // west-centre avenue
+  near.x = 2.5; near.y = 13.5; near.state = 'patrol'; // within earshot, can't see Mara
+  const far = run.zombies.find((z) => z.kind === 'walker' && z.route[0].r === 1); // north avenue
+  run.player.x = 7.5; run.player.y = 15.5;
+  const ev = stepSurvivor(run, IDLE, DT);
+  const sc = ev.find((e) => e.type === 'scream');
+  assert(sc, 'screamed');
+  eq(near.state, 'search');
+  eq(near.lastSeen.x, s.x, 'goes to the screamer');
+  eq(far.state, 'patrol');
+  // It won't shriek again straight away.
+  run.player.x = 21.5; run.player.y = 31.5;
+  for (let i = 0; i < 30; i++) stepSurvivor(run, IDLE, DT);
+  s.state = 'patrol'; run.player.x = 7.5; run.player.y = 15.5;
+  eq(stepSurvivor(run, IDLE, DT).filter((e) => e.type === 'scream').length, 0);
+});
+
+test('Brute: ignores a thrown distraction and smashes the car in its way', () => {
+  const run = cityWith('brute');
+  const b = only(run, 'brute');
+  run.player.x = 1.5; run.player.y = 21.5; run.player.fx = 1; run.player.fy = 0;
+  const landing = distractionLanding(run);
+  b.x = run.player.x + SURVIVOR.detectRange + 0.4; b.y = landing.y; b.state = 'patrol'; // by the noise, out of Mara's sight
+  assert(!canSee(run, b));
+  assert(Math.hypot(b.x - landing.x, b.y - landing.y) < SKILLS.survivor.hearing, 'within earshot of the noise');
+  run.skillCooldown = 0;
+  stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
+  assert(b.state !== 'investigate', 'not fooled by the noise');
+  // A car at (3,20); walk the brute through it.
+  assert(isSolid(run.map, 3, 20));
+  b.x = 3.5; b.y = 18.5; b.state = 'search'; b.lost = 0;
+  run.player.x = 3.5; run.player.y = 22.6; // straight below, past the car
+  b.lastSeen = { x: 3.5, y: 22.6 };
+  for (let i = 0; i < 120 && !run.outcome; i++) stepSurvivor(run, IDLE, DT);
+  assert(!isSolid(run.map, 3, 20), 'car flattened');
+  assert(run.smashed.some((t) => t.c === 3 && t.r === 20));
+});
+
+test('Crawler: hidden until Mara comes close, then rattles before it lunges', () => {
+  const run = cityWith('crawler');
+  const c = run.zombies.find((z) => z.lair.c === 20 && z.lair.r === 4);
+  run.player.x = 20.5; run.player.y = 8.5; // out of reach
+  for (let i = 0; i < 60; i++) stepSurvivor(run, IDLE, DT);
+  eq(c.state, 'lurk');
+  run.player.x = 20.5; run.player.y = 6.3; // straight down the street from it
+  let ev = stepSurvivor(run, IDLE, DT);
+  assert(ev.some((e) => e.type === 'rattle'), 'rattle warns first');
+  eq(c.state, 'rattle');
+  const at = { x: c.x, y: c.y };
+  for (let i = 0; i < Math.floor(MONSTERS.crawler.rattle * 60) - 2; i++) stepSurvivor(run, IDLE, DT);
+  eq(c.x, at.x, 'still while it rattles');
+  run.player.x = 20.5; run.player.y = 12.5; // she ran
+  for (let i = 0; i < 12; i++) ev = stepSurvivor(run, IDLE, DT);
+  eq(c.state, 'lunge');
+  assert(c.y > at.y + 0.2, 'lunges toward her');
+});
+
+test('Keeper: a brute takes three slashes and shrugs off most of the Soul Pulse', () => {
+  const run = quiet(createKeeperRun(3));
+  run.player.x = 2.5; run.player.y = 15.5; run.player.fx = 1; run.player.fy = 0;
+  const e = activeEnemy(run, 3.4, 15.5);
+  Object.assign(e, { kind: 'brute', hp: KEEPER.brute.hp, r: KEEPER.brute.r });
+  for (let i = 0; i < 2; i++) {
+    tick(run, stepKeeper, { x: 0, y: 0, action: true });
+    eq(run.stats.defeated, 0, `alive after slash ${i + 1}`);
+    e.x = 3.4; e.y = 15.5; e.push = null;
+    run.cooldown = 0;
+  }
+  tick(run, stepKeeper, { x: 0, y: 0, action: true });
+  eq(run.stats.defeated, 1);
+  eq(run.score, KEEPER.score.defeat, 'same score as any undead');
+});
+
+test('Keeper: specials take the last places of their wave', () => {
+  const w = KEEPER.waves[2];
+  const kinds = [];
+  for (let q = w.count; q >= 1; q--) kinds.push(specialFor(w, q));
+  eq(kinds.filter((k) => k === 'walker').length, w.count - w.specials.length);
+  eq(kinds.slice(-w.specials.length).join(), w.specials.join());
+  eq(KEEPER.waves.reduce((n, wv) => n + wv.count, 0), 18, 'wave sizes unchanged');
+});
+
+test('Keeper: a wraith drifts through walls, and only its solid form can hit or be hit', () => {
+  const run = quiet(createKeeperRun(4));
+  const e = activeEnemy(run, 1.5, 1.5);
+  Object.assign(e, { kind: 'wraith', speed: 2 });
+  let throughWall = false;
+  for (let i = 0; i < 200; i++) {
+    stepKeeper(run, IDLE, DT);
+    if (isSolid(run.map, Math.floor(e.x), Math.floor(e.y))) throughWall = true;
+  }
+  assert(throughWall, 'passed through a wall');
+  // Mist form: no slash, no damage.
+  const m = activeEnemy(run, 3.4, 15.5);
+  Object.assign(m, { kind: 'wraith', speed: 0 });
+  run.player.x = 2.5; run.player.y = 15.5; run.player.fx = 1; run.player.fy = 0;
+  const cycle = KEEPER.wraith.solidFor + KEEPER.wraith.mistFor;
+  run.time = cycle * 10 - m.id * 0.83 + KEEPER.wraith.solidFor + 0.2; // in its mist phase
+  assert(!isWraithSolid(run, m));
+  eq(slashHits(run, m), false);
+  m.x = run.player.x; m.y = run.player.y;
+  const hp = run.health;
+  stepKeeper(run, IDLE, DT);
+  eq(run.health, hp, 'mist passes through her');
+});
+
+test('Remote navigation: arrows move to the nearest control in that direction', () => {
+  // A 3-wide row with one control below the middle.
+  const at = (x, y) => ({ getBoundingClientRect: () => ({ left: x, top: y, width: 40, height: 40 }) });
+  const left = at(0, 0), mid = at(100, 0), right = at(200, 0), below = at(110, 120);
+  const all = [left, mid, right, below];
+  eq(nearestInDirection(mid, all, [1, 0]), right);
+  eq(nearestInDirection(mid, all, [-1, 0]), left);
+  eq(nearestInDirection(mid, all, [0, 1]), below);
+  eq(nearestInDirection(mid, all, [0, -1]), null, 'nothing above');
+  eq(nearestInDirection(below, all, [0, -1]), mid, 'straight up beats the corners');
 });
 
 // ---------------- Storage ----------------
@@ -824,17 +1011,17 @@ test('Distraction: lands 2 tiles ahead on open street, and stops short of walls'
   run.player.x = 3.5; run.player.y = 13.5; run.player.fx = 1; run.player.fy = 0;
   const open = distractionLanding(run);
   assert(Math.abs(open.x - 5.5) < 0.06, `x=${open.x}`);
-  // Row 9 is open, walls lie above: face the building from one tile away.
-  run.player.x = 2.5; run.player.y = 9.5; run.player.fx = 0; run.player.fy = -1;
+  // The town hall's neighbour stands at row 6: face it from the avenue just below.
+  run.player.x = 4.5; run.player.y = 7.5; run.player.fx = 0; run.player.fy = -1;
   eq(distractionLanding(run), null, 'a wall right ahead leaves no room');
-  run.player.x = 1.5; run.player.y = 9.5;
+  run.player.x = 4.5; run.player.y = 8.5;
   const blocked = distractionLanding(run);
   assert(blocked.y > 6.9 && !isSolid(run.map, Math.floor(blocked.x), Math.floor(blocked.y)), `y=${blocked.y}`);
 });
 
 test('Distraction: with no room it explains why and does not spend the cooldown', () => {
   const run = clearStart(createSurvivorRun());
-  run.player.x = 2.5; run.player.y = 9.5; run.player.fx = 0; run.player.fy = -1;
+  run.player.x = 4.5; run.player.y = 7.5; run.player.fx = 0; run.player.fy = -1;
   const ev = stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
   assert(ev.some((e) => e.type === 'skillDenied'));
   eq(run.skillCooldown, 0);
@@ -843,14 +1030,14 @@ test('Distraction: with no room it explains why and does not spend the cooldown'
 
 test('Distraction: zombies in earshot investigate for the set time, then return to patrol', () => {
   const run = createSurvivorRun({ distractDuration: 3 });
-  const z = run.zombies[2]; // row 9 patrol
+  const z = run.zombies[3]; // middle avenue patrol
   run.zombies = [z];
-  z.x = 2.5; z.y = 9.5; z.wp = 1;
-  run.player.x = 6.5; run.player.y = 9.5; run.player.fx = -1; run.player.fy = 0; // lands at x=4.5
+  z.x = 2.5; z.y = 13.5; z.wp = 1;
+  run.player.x = 6.5; run.player.y = 13.5; run.player.fx = -1; run.player.fy = 0; // lands at x=4.5
   stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
   eq(z.state, 'investigate');
   eq(run.skillCooldown, 22);
-  run.player.x = 6.5; run.player.y = 23.5; // well out of sight
+  run.player.x = 21.5; run.player.y = 31.5; // well out of sight
   for (let i = 0; i < 60 * 2.5; i++) stepSurvivor(run, IDLE, DT);
   eq(z.state, 'investigate');
   assert(Math.abs(z.x - 4.5) < 1.2, `walked to the noise, x=${z.x}`);
@@ -862,13 +1049,13 @@ test('Distraction: zombies in earshot investigate for the set time, then return 
 
 test('Distraction: Lasting Rattle lasts longer, and zombies out of earshot ignore it', () => {
   const run = createSurvivorRun({ distractDuration: 4 });
-  const z = run.zombies[2];
+  const z = run.zombies[3];
   const far = run.zombies[0];
   run.zombies = [z, far];
-  z.x = 2.5; z.y = 9.5;
-  run.player.x = 6.5; run.player.y = 9.5; run.player.fx = -1; run.player.fy = 0;
+  z.x = 2.5; z.y = 13.5;
+  run.player.x = 6.5; run.player.y = 13.5; run.player.fx = -1; run.player.fy = 0;
   stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
-  run.player.x = 6.5; run.player.y = 23.5;
+  run.player.x = 21.5; run.player.y = 31.5;
   for (let i = 0; i < 60 * 3.5; i++) stepSurvivor(run, IDLE, DT);
   eq(z.state, 'investigate');
   eq(far.state, 'patrol');
@@ -876,19 +1063,19 @@ test('Distraction: Lasting Rattle lasts longer, and zombies out of earshot ignor
 
 test('Distraction: a zombie that can see Mara keeps chasing; one that spots her mid-check chases', () => {
   const run = createSurvivorRun();
-  const z = run.zombies[2];
+  const z = run.zombies[3];
   run.zombies = [z];
-  z.x = 4.5; z.y = 9.5;
-  run.player.x = 6.5; run.player.y = 9.5; run.player.fx = 1; run.player.fy = 0;
+  z.x = 4.5; z.y = 13.5;
+  run.player.x = 6.5; run.player.y = 13.5; run.player.fx = 1; run.player.fy = 0;
   stepSurvivor(run, IDLE, DT);
   eq(z.state, 'chase');
   stepSurvivor(run, { x: 0, y: 0, skill: true }, DT);
   eq(z.state, 'chase', 'not invisibility');
   const run2 = createSurvivorRun();
-  const y = run2.zombies[2];
+  const y = run2.zombies[3];
   run2.zombies = [y];
-  y.x = 2.5; y.y = 9.5;
-  run2.player.x = 6.5; run2.player.y = 9.5; run2.player.fx = -1; run2.player.fy = 0;
+  y.x = 2.5; y.y = 13.5;
+  run2.player.x = 6.5; run2.player.y = 13.5; run2.player.fx = -1; run2.player.fy = 0;
   stepSurvivor(run2, { x: 0, y: 0, skill: true }, DT);
   eq(y.state, 'investigate');
   run2.player.x = y.x + 2; run2.player.y = y.y;
@@ -938,8 +1125,8 @@ test('Character views: every Mara costume changes her jacket in all three views'
 });
 
 test('Zombie strides: a planted foot keeps pace with the ground at patrol and chase speed', () => {
-  for (const [kind, height] of [['zombie', 400], ['zgirl', 420]]) {
-    const g = GAITS[kind], unitsPerTile = height / 1.62;
+  for (const [kind, height] of [['zombie', RIGS.zombie.height], ['zgirl', RIGS.zgirl.height]]) {
+    const g = GAITS[kind], unitsPerTile = height / 1.75;
     for (const tilesPerSecond of [SURVIVOR.patrolSpeed, SURVIVOR.chaseSpeed, 1.35]) {
       const radiansPerSecond = g.perTile * tilesPerSecond;
       const plantedFoot = (2 * g.stride) / (g.planted * ((Math.PI * 2) / radiansPerSecond));

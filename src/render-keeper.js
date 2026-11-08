@@ -1,15 +1,16 @@
 // Cemetery Keeper v2 renderer: three-quarter view walls, generated art, cutout rigs.
 // World units are tiles. Walls rise WALL_H tiles above their footprint, so each
 // row is drawn back-to-front with the characters standing in it.
-import { KEEPER } from './keeper.js';
+import { KEEPER, isWraithSolid } from './keeper.js';
 import { SKILLS } from './catalog.js';
-import { RIGS, GAITS, drawRig, facingView, pose, undeadPose, undeadRig } from './rig.js';
+import { RIGS, GAITS, DRAW_SCALE, drawRig, facingView, pose, undeadPose, undeadRig, rigFiles } from './rig.js';
 import {
   INK, clamp, lerp, easeOut, hash, drawImg, shadow, pool, tilePattern, offscreen,
-  occlude, blitVisible, followCamera, createAnimator, drawFloatText, createLayerGuard, firstTilePoint,
+  occlude, blitVisible, followCamera, tileSize, createAnimator, drawFloatText, createLayerGuard, firstTilePoint,
 } from './render-common.js';
 
 export const KEEPER_IMAGES = {
+  ...rigFiles(['brute', 'wraith']),
   texGround: 'assets/img/v2/tex-ground.jpg',
   texWallTop: 'assets/img/v2/tex-walltop.jpg',
   texWallFront: 'assets/img/v2/tex-wallfront.jpg',
@@ -335,7 +336,10 @@ export function createKeeperRenderer(images) {
 
   // ---------------- Frame ----------------
 
+  let runRef = null; // the run being drawn, for helpers that need its clock
+
   function draw(ctx, run, view) {
+    runRef = run;
     const { cssW, cssH, time, reducedMotion: reduced } = view;
     const dpr = Math.min(view.dpr, 2); // cached layers don't need more than 2x
     const { map } = run;
@@ -343,7 +347,7 @@ export function createKeeperRenderer(images) {
     lastTime = time;
 
     // Zoom so ~7.8 tiles fit across, like the reference; keep a sane size on wide screens.
-    const t = clamp(cssW / 7.8, 36, 66);
+    const t = tileSize(cssW, cssH, 7.8);
     if (cache && guard.isLost(layers())) cache = null;
     if (!cache || cache.t !== t || cache.dpr !== dpr || cache.run !== run) {
       cache = { ...buildGround(run, t, dpr), walls: buildWalls(run, t, dpr), run };
@@ -439,7 +443,12 @@ export function createKeeperRenderer(images) {
     let alpha = 1;
     if (run.invuln > 0 && !reduced) alpha = Math.floor(time * 12) % 2 ? 0.45 : 1;
     const rig = s.view === 'side' ? RIGS.reaperSide : s.view === 'back' ? RIGS.reaperBack : RIGS.reaper;
+    // A faint soul-green rim keeps the black robe readable against the dark cemetery.
+    g.save();
+    g.shadowColor = 'rgba(170, 240, 120, .55)';
+    g.shadowBlur = t * 0.14;
     drawRig(g, rigImages, rig, reaperPose(run, s, time, dt, reduced), p.x * t, (p.y + 0.36) * t, 1.85 * t, { flip: s.view === 'side' && s.flip, alpha });
+    g.restore();
     if (run.invuln > 0 && reduced) {
       g.strokeStyle = '#ff8a8a';
       g.lineWidth = 3;
@@ -457,14 +466,15 @@ export function createKeeperRenderer(images) {
   }
 
   function drawUndead(g, e, t, time, dt, reduced) {
-    const kind = e.id % 3 === 0 ? 'zgirl' : 'zombie';
-    const s = animator.step(e, dt, 0, GAITS[kind].perTile);
+    const kind = e.kind === 'brute' || e.kind === 'wraith' ? e.kind : e.id % 3 === 0 ? 'zgirl' : 'zombie';
+    const s = animator.step(e, dt, 0, (GAITS[kind] || GAITS.zombie).perTile);
     s.view = facingView(e.fx, e.fy, s.view);
     if (e.fx < -0.2) s.flip = true;
     else if (e.fx > 0.2) s.flip = false;
+    if (kind === 'wraith') { drawWraith(g, e, s, t, time, reduced); return; }
     const rig = undeadRig(kind, s.view);
     const flip = s.view === 'side' && s.flip;
-    const h = 1.62 * t;
+    const h = 1.75 * (DRAW_SCALE[kind] || 1) * t;
     const x = e.x * t, foot = (e.y + 0.38) * t;
     const p = undeadPose(time, e.id, s, reduced);
     if (e.state === 'rising') {
@@ -487,6 +497,21 @@ export function createKeeperRenderer(images) {
     }
     shadow(g, x, foot - t * 0.04, t * 0.38);
     drawRig(g, images, rig, p, x, foot, h, { flip });
+  }
+
+  // A wraith floats above the ground. Solid, it's clear and dangerous; as mist it's a faint shape.
+  function drawWraith(g, e, s, t, time, reduced) {
+    const solid = isWraithSolid(runRef, e);
+    e.fade = (e.fade ?? 1) + ((solid ? 1 : 0.22) - (e.fade ?? 1)) * (reduced ? 1 : 0.12);
+    const bob = reduced ? 0 : Math.sin(time * 2.2 + e.id) * 0.08;
+    const img = images[s.view === 'side' ? 'wraithSide' : s.view === 'back' ? 'wraithBack' : 'wraithFront'];
+    const h = 2.0 * t, w = h * (img.width / img.height);
+    if (e.state === 'rising') {
+      drawImg(g, img, e.x * t, (e.y + 0.1) * t, w, { alpha: 1 - e.rise / KEEPER.spawnWarning, flip: s.view === 'side' && s.flip });
+      return;
+    }
+    pool(g, t, e.x, e.y + 0.2, 0.8, '150, 200, 255', 0.12 * e.fade);
+    drawImg(g, img, e.x * t, (e.y + 0.1 + bob) * t, w, { alpha: 0.9 * e.fade, flip: s.view === 'side' && s.flip });
   }
 
   function drawSoul(g, s, t, time, reduced) {

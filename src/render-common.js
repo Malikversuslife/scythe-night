@@ -132,6 +132,13 @@ export function blitVisible(ctx, layer, worldW, worldH, cx, cy, cssW, cssH) {
   ctx.drawImage(layer, vx * s, vy * s, vw * s, vh * s, vx, vy, vw, vh);
 }
 
+// Tile size for the camera. Phones in portrait fit about `across` tiles to the width; wide
+// windows size tiles by height instead, so landscape and desktop show more of the world around.
+export function tileSize(cssW, cssH, across) {
+  if (cssW > cssH) return clamp(cssH / (across * 1.15), 36, 84);
+  return clamp(cssW / across, 34, 66);
+}
+
 // Smoothed follow camera that keeps the player in the band between the HUD and controls.
 export function followCamera(cam, run, t, view, dt, reduced) {
   const { cssW, cssH, insets } = view;

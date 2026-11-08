@@ -26,11 +26,17 @@
   <meta name="twitter:image" content="https://scythe-night.vercel.app/og-image.jpg?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Butcherman&family=Lilita+One&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Butcherman&family=Cinzel:wght@600;700;900&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app" class="app">
+
+    <!-- Scythe Night is a landscape game: a phone held upright is asked to turn. -->
+    <div id="rotate-hint" class="rotate-hint" role="status" aria-live="polite">
+      <div class="rotate-phone" aria-hidden="true"></div>
+      <p>Turn your phone sideways to play</p>
+    </div>
 
     <!-- Boot -->
     <section id="screen-boot" class="screen screen-boot" aria-labelledby="boot-title">
@@ -49,8 +55,7 @@
       </div>
       <div class="splash-actions">
         <button id="btn-play" class="banner-btn" type="button">
-          <img src="assets/img/banner-tap.png" alt="" draggable="false">
-          <span class="visually-hidden">Play</span>
+          <span class="banner-text">Enter the night</span>
         </button>
         <div class="splash-row">
           <button id="btn-splash-settings" class="stone-btn small" type="button"><img class="btn-icon" src="assets/img/ui/icon-gear.png" alt="">Settings</button>
@@ -114,7 +119,7 @@
         </div>
       </header>
       <h1 id="select-title" class="select-banner">
-        <img src="assets/img/banner-select.png" alt="Select your story" draggable="false">
+        <span class="banner-text">Select your story</span>
       </h1>
       <div class="card-list">
         <div class="story-col">
@@ -141,9 +146,12 @@
     <!-- Intro / how to play -->
     <section id="screen-intro" class="screen screen-intro bg-cemetery" aria-labelledby="intro-title" hidden>
       <div class="stone-panel intro-panel">
+        <div class="intro-col intro-lead">
         <canvas id="intro-preview" class="intro-preview" aria-hidden="true"></canvas>
         <h1 id="intro-title" class="display-title"></h1>
         <p id="intro-story" class="intro-story"></p>
+        </div>
+        <div class="intro-col">
         <h2 class="panel-heading">How to play</h2>
         <ul id="intro-rules" class="rule-list"></ul>
         <h2 class="panel-heading">Controls</h2>
@@ -152,6 +160,7 @@
         <div class="panel-actions">
           <button id="btn-intro-back" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-back.png" alt="">Back</button>
           <button id="btn-intro-start" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Start</button>
+        </div>
         </div>
       </div>
     </section>
@@ -203,6 +212,7 @@
     <!-- Results -->
     <section id="screen-results" class="screen screen-results bg-cemetery dim" aria-labelledby="results-title" hidden>
       <div class="stone-panel results-panel">
+        <div class="results-scroll">
         <h1 id="results-title" class="display-title"></h1>
         <p id="results-reason" class="results-reason"></p>
         <table class="results-table" id="results-table"><tbody></tbody></table>
@@ -221,6 +231,7 @@
           </div>
           <p id="post-status" class="fine-print" role="status"></p>
         </form>
+        </div>
       </div>
       <div class="results-foot">
       <div class="results-actions">

@@ -2,43 +2,54 @@
 import { parseMap, moveCircle, lineOfSight, distanceField, nextStep, isSolid, dist2, tileOf, center } from './world.js';
 import { SKILLS } from './catalog.js';
 
-// '#' building, 'x' crates/bins (solid), '.' street, 'P' start,
-// 'F' maintenance kiosk (fuse), 'B' refuge power box, 'L' courtyard bell, 'R' refuge door.
+// '#' building, 'x' cars, bins, planters and trees (solid), '.' street, 'P' start,
+// 'F' maintenance kiosk (fuse), 'B' refuge power box, 'L' plaza bell, 'R' town hall door (the refuge).
+// Avenues are two tiles wide; buildings stand on large lots between them.
 export const SURVIVOR_MAP = [
-  '#############',
-  '######R######',
-  '##x.......x##',
-  '##....L....##',
-  '##.........##',
-  '####.###.####',
-  '#...........#',
-  '#.##.##.##.B#',
-  '#.##.##.##..#',
-  '#...........#',
-  '###.##.##.###',
-  '#...#...#...#',
-  '#.x.#.#.#.x.#',
-  '#...........#',
-  '#.##.###.##.#',
-  '#F##.....##.#',
-  '#...##.##...#',
-  '#.#.......#.#',
-  '#.#.##.##.#.#',
-  '#...........#',
-  '####.#.#.####',
-  '#....#.#....#',
-  '#.x...P...x.#',
-  '#...........#',
-  '#############',
+  '#######################',
+  '#.....................#',
+  '#.....................#',
+  '#..####..#####..####..#',
+  '#x.####..#####..####.x#',
+  '#..####..#####..####..#',
+  '#..####..##R##..####..#',
+  '#.....................#',
+  '#.....................#',
+  '#..####..##.##..####..#',
+  '#..####..##.##..####.B#',
+  '#..####.x##.##..####..#',
+  '#..####..##.##..####..#',
+  '#.....................#',
+  '#.....................#',
+  '#..####..x...x..####..#',
+  '#F.####....L....####..#',
+  '#..####..x...x..####..#',
+  '#.....................#',
+  '#.....................#',
+  '#..x..x..#####.x####..#',
+  '#........#####........#',
+  '#...x....#####..####.x#',
+  '#..x..x..#####..####..#',
+  '#.....................#',
+  '#.....................#',
+  '#..#.##..#####..####..#',
+  '#..#.##..#####..####..#',
+  '#x.#.##..#####..####.x#',
+  '#..#.##..#####..####..#',
+  '#.......x..P..x.......#',
+  '#.....................#',
+  '#######################',
 ];
 
 // Patrol loops in tile coordinates; consecutive points share a row or column of open street.
 export const PATROLS = [
-  [[3, 17], [9, 17]],
-  [[1, 11], [3, 11], [3, 13], [1, 13]],
-  [[1, 9], [11, 9]],
-  [[11, 6], [1, 6]],
-  [[3, 4], [9, 4], [9, 2], [3, 2]],
+  [[1, 1], [21, 1]],                      // north avenue
+  [[2, 7], [20, 7]],                      // past the town hall door
+  [[14, 8], [14, 25]],                    // east-centre avenue
+  [[2, 13], [20, 13]],                    // middle avenue
+  [[8, 14], [8, 25]],                     // west-centre avenue
+  [[2, 18], [7, 18], [7, 24], [2, 24]],   // around the park
+  [[20, 14], [20, 25]],                   // east avenue
 ];
 
 export const SURVIVOR = {
@@ -53,6 +64,18 @@ export const SURVIVOR = {
   contact: 0.52,
   repath: 0.25,
   investigateSpeed: 1.8,
+};
+
+// The worse things in the city. Each has its own rule that changes how you play around it.
+export const MONSTERS = {
+  // Hunts you by sound wherever you are, but can't move while your flashlight is on it.
+  stalker: { r: 0.3, speed: 1.9, farSpeed: 1.2, near: 9, linger: 1.0, huntFor: 18, restFor: 14, beamLength: 4.6, beamHalfAngle: (26 * Math.PI) / 180, start: [21, 1] },
+  // A walker that shrieks when it sees you, calling every zombie in earshot to it.
+  screamer: { route: 3, call: 6, cooldown: 10, chaseSpeed: 1.9 },
+  // Slow and huge. Distractions don't work on it, and it smashes cars and trees in its way.
+  brute: { route: 5, r: 0.42, contact: 0.64, patrolSpeed: 0.85, chaseSpeed: 1.85 },
+  // Hides beside a parked car, rattles, then lunges.
+  crawler: { r: 0.28, trigger: 2.3, rattle: 0.45, lungeSpeed: 4.0, lungeTime: 1.0, crawlSpeed: 1.0, rest: 4, lairs: [[20, 4], [2, 28]] },
 };
 
 export const TASKS = [
@@ -72,9 +95,12 @@ export function createSurvivorRun(loadout = {}) {
   const door = map.marks.R[0];
   const objects = {};
   for (const t of TASKS) objects[t.id] = map.marks[t.mark][0];
+  const kindOf = (i) => (i === MONSTERS.screamer.route ? 'screamer' : i === MONSTERS.brute.route ? 'brute' : 'walker');
   const zombies = PATROLS.map((route, i) => ({
     id: i + 1,
-    x: route[0][0] + 0.5, y: route[0][1] + 0.5, r: SURVIVOR.zombieRadius,
+    kind: kindOf(i),
+    x: route[0][0] + 0.5, y: route[0][1] + 0.5, r: kindOf(i) === 'brute' ? MONSTERS.brute.r : SURVIVOR.zombieRadius,
+    screamCooldown: 0,
     route: route.map(([c, r]) => ({ c, r })),
     wp: 1 % route.length,
     state: 'patrol', // 'patrol' | 'chase' | 'search' | 'return'
@@ -85,6 +111,20 @@ export function createSurvivorRun(loadout = {}) {
     field: null, fieldKey: '', fieldAge: 0,
     fx: 1, fy: 0,
   }));
+  // The stalker waits in the far corner until the fuse is taken.
+  const st = MONSTERS.stalker;
+  zombies.push({
+    id: zombies.length + 1, kind: 'stalker', state: 'dormant',
+    x: st.start[0] + 0.5, y: st.start[1] + 0.5, r: st.r, fx: -1, fy: 0,
+    field: null, fieldKey: '', fieldAge: 0, investigate: 0, noiseAt: null, linger: 0, clock: 0,
+  });
+  for (const [c, r] of MONSTERS.crawler.lairs) {
+    zombies.push({
+      id: zombies.length + 1, kind: 'crawler', state: 'lurk', lair: { c, r },
+      x: c + 0.5, y: r + 0.5, r: MONSTERS.crawler.r, fx: 0, fy: 1, timer: 0,
+      field: null, fieldKey: '', fieldAge: 0,
+    });
+  }
   return {
     campaign: 'survivor',
     rules: { distractCooldown: loadout.distractCooldown ?? 22, distractDuration: loadout.distractDuration ?? 3 },
@@ -97,6 +137,7 @@ export function createSurvivorRun(loadout = {}) {
     doorOpen: false,
     done: { fuse: false, power: false, bell: false },
     zombies,
+    smashed: [], // tiles a brute has flattened
     time: 0,
     outcome: null,
   };
@@ -158,8 +199,9 @@ function useDistraction(run, events) {
   run.noise = { ...landing, t: 0 };
   let heard = 0;
   for (const z of run.zombies) {
+    if (z.kind === 'brute' || z.kind === 'crawler' || z.state === 'dormant') continue; // it doesn't care
     // A zombie already looking at Mara keeps chasing: this isn't invisibility.
-    if (dist2(z, landing) > SKILLS.survivor.hearing ** 2 || canSee(run, z)) continue;
+    if (dist2(z, landing) > SKILLS.survivor.hearing ** 2 || (z.kind !== 'stalker' && canSee(run, z))) continue;
     z.investigate = run.rules.distractDuration;
     z.noiseAt = { c: Math.floor(landing.x), r: Math.floor(landing.y) };
     z.state = 'investigate';
@@ -217,8 +259,12 @@ export function stepSurvivor(run, input, dt) {
 
   // ---- Zombies ----
   for (const z of run.zombies) {
-    updateZombie(run, z, dt, solid, events);
-    if (dist2(z, p) < SURVIVOR.contact ** 2) caught = true;
+    if (z.kind === 'stalker') updateStalker(run, z, dt, solid, events);
+    else if (z.kind === 'crawler') updateCrawler(run, z, dt, solid, events);
+    else updateZombie(run, z, dt, z.kind === 'brute' ? bruteSolid(run, solid) : solid, events);
+    if (z.state === 'dormant' || z.state === 'lurk') continue;
+    const reach = z.kind === 'brute' ? MONSTERS.brute.contact : SURVIVOR.contact;
+    if (dist2(z, p) < reach ** 2) { caught = true; run.caughtBy = z.kind; }
   }
 
   if (caught) {
@@ -238,9 +284,13 @@ export function canSee(run, z) {
 }
 
 function updateZombie(run, z, dt, solid, events) {
+  z.screamCooldown = Math.max(0, (z.screamCooldown || 0) - dt);
   const sees = canSee(run, z);
   if (sees) {
-    if (z.state !== 'chase') events.push({ type: 'spotted', id: z.id });
+    if (z.state !== 'chase') {
+      events.push({ type: 'spotted', id: z.id });
+      if (z.kind === 'screamer' && z.screamCooldown <= 0) scream(run, z, events);
+    }
     z.state = 'chase';
     z.lost = 0;
     z.investigate = 0;
@@ -260,19 +310,139 @@ function updateZombie(run, z, dt, solid, events) {
     }
   }
 
+  const patrolSpeed = z.kind === 'brute' ? MONSTERS.brute.patrolSpeed : SURVIVOR.patrolSpeed;
+  const chaseSpeed = z.kind === 'brute' ? MONSTERS.brute.chaseSpeed : z.kind === 'screamer' ? MONSTERS.screamer.chaseSpeed : SURVIVOR.chaseSpeed;
   if (z.state === 'patrol') {
     const wp = center(z.route[z.wp]);
-    if (moveToward(run, z, wp, SURVIVOR.patrolSpeed * dt, solid)) z.wp = (z.wp + 1) % z.route.length;
+    if (moveToward(run, z, wp, patrolSpeed * dt, solid)) z.wp = (z.wp + 1) % z.route.length;
   } else if (z.state === 'chase' && lineOfSight(run.map, z.x, z.y, run.player.x, run.player.y, solid)) {
-    moveToward(run, z, run.player, SURVIVOR.chaseSpeed * dt, solid);
+    moveToward(run, z, run.player, chaseSpeed * dt, solid);
   } else {
     // Search the last sighting, or walk home along the street grid.
-    const goal = z.state === 'return' ? z.route[z.wp] : z.state === 'investigate' ? z.noiseAt : tileOf(z.lastSeen);
-    const speed = z.state === 'return' ? SURVIVOR.patrolSpeed : z.state === 'investigate' ? SURVIVOR.investigateSpeed : SURVIVOR.chaseSpeed;
+    const goal = z.state === 'return' ? z.route[z.wp] : z.state === 'investigate' ? z.noiseAt : tileOf(z.lastSeen || z); // with no sighting, it searches where it stands
+    const speed = z.state === 'return' ? patrolSpeed : z.state === 'investigate' ? SURVIVOR.investigateSpeed : chaseSpeed;
     followField(run, z, goal, speed * dt, solid, dt);
     if (z.state === 'return' && dist2(z, center(goal)) < 0.05) {
       z.state = 'patrol';
       z.field = null;
+    }
+  }
+  if (z.kind === 'brute') smashUnder(run, z, events);
+}
+
+// ---------------- The worse things ----------------
+
+// A shriek sends every zombie within earshot running to the screamer.
+function scream(run, z, events) {
+  const m = MONSTERS.screamer;
+  z.screamCooldown = m.cooldown;
+  let called = 0;
+  for (const o of run.zombies) {
+    if (o === z || o.kind === 'crawler' || o.kind === 'stalker' || o.state === 'chase') continue;
+    if (dist2(o, z) > m.call ** 2) continue;
+    o.state = 'search';
+    o.lost = 0;
+    o.investigate = 0;
+    o.lastSeen = { x: z.x, y: z.y }; // they come to the sound
+    o.field = null;
+    called++;
+  }
+  events.push({ type: 'scream', id: z.id, x: z.x, y: z.y, called });
+}
+
+// True while the flashlight beam is on a point: close enough, inside the cone, nothing in between.
+export function inBeam(run, z) {
+  const m = MONSTERS.stalker, p = run.player;
+  const dx = z.x - p.x, dy = z.y - p.y;
+  const d = Math.hypot(dx, dy);
+  if (d > m.beamLength) return false;
+  if (d > 0.3 && (dx * p.fx + dy * p.fy) / d < Math.cos(m.beamHalfAngle)) return false;
+  return lineOfSight(run.map, p.x, p.y, z.x, z.y, solidFor(run));
+}
+
+function updateStalker(run, z, dt, solid, events) {
+  const m = MONSTERS.stalker;
+  if (z.state === 'dormant') {
+    if (!run.done.fuse) return;
+    z.state = 'hunt';
+    z.clock = m.huntFor;
+    events.push({ type: 'stalkerWakes', id: z.id });
+  }
+  // It hunts in spells: a long stretch on your trail, then it slinks back to its corner.
+  z.clock -= dt;
+  if (z.state === 'retreat') {
+    followField(run, z, { c: m.start[0], r: m.start[1] }, m.farSpeed * dt, solid, dt);
+    if (z.clock <= 0) { z.state = 'hunt'; z.clock = m.huntFor; events.push({ type: 'stalkerWakes', id: z.id }); }
+    return;
+  }
+  if (z.clock <= 0) {
+    z.state = 'retreat';
+    z.clock = m.restFor;
+    z.linger = 0;
+    events.push({ type: 'stalkerRetreats', id: z.id });
+    return;
+  }
+  // Lit, it can't move, and it stays rooted a moment after the beam leaves it.
+  if (inBeam(run, z)) {
+    if (z.state !== 'frozen') events.push({ type: 'frozen', id: z.id });
+    z.state = 'frozen';
+    z.linger = m.linger;
+    return;
+  }
+  if (z.linger > 0) {
+    z.linger -= dt;
+    return;
+  }
+  if (z.investigate > 0) {
+    z.state = 'investigate';
+    z.investigate -= dt;
+    followField(run, z, z.noiseAt, SURVIVOR.investigateSpeed * dt, solid, dt);
+    return;
+  }
+  z.state = 'hunt';
+  const near = dist2(z, run.player) < m.near ** 2;
+  followField(run, z, tileOf(run.player), (near ? m.speed : m.farSpeed) * dt, solid, dt);
+}
+
+function updateCrawler(run, z, dt, solid, events) {
+  const m = MONSTERS.crawler, p = run.player;
+  if (z.state === 'lurk') {
+    z.timer = Math.max(0, z.timer - dt);
+    if (z.timer === 0 && dist2(z, p) < m.trigger ** 2 && lineOfSight(run.map, z.x, z.y, p.x, p.y, solid)) {
+      z.state = 'rattle';
+      z.timer = m.rattle;
+      events.push({ type: 'rattle', id: z.id, x: z.x, y: z.y });
+    }
+  } else if (z.state === 'rattle') {
+    z.timer -= dt;
+    if (z.timer <= 0) {
+      z.state = 'lunge';
+      z.timer = m.lungeTime;
+      events.push({ type: 'lunge', id: z.id });
+    }
+  } else if (z.state === 'lunge') {
+    z.timer -= dt;
+    moveToward(run, z, p, m.lungeSpeed * dt, solid);
+    if (z.timer <= 0) { z.state = 'return'; z.field = null; }
+  } else {
+    followField(run, z, z.lair, m.crawlSpeed * dt, solid, dt);
+    if (dist2(z, center(z.lair)) < 0.02) { z.state = 'lurk'; z.timer = m.rest; z.fx = 0; z.fy = 1; }
+  }
+}
+
+// Brutes walk through cars, bins and trees; whatever they step into is flattened.
+function bruteSolid(run, solid) {
+  return (map, c, r) => (map.rows[r]?.[c] === 'x' ? false : solid(map, c, r));
+}
+
+function smashUnder(run, z, events) {
+  const { map } = run;
+  for (let r = Math.floor(z.y - z.r); r <= Math.floor(z.y + z.r); r++) {
+    for (let c = Math.floor(z.x - z.r); c <= Math.floor(z.x + z.r); c++) {
+      if (map.rows[r]?.[c] !== 'x' || !map.solid[r * map.w + c]) continue;
+      map.solid[r * map.w + c] = 0;
+      run.smashed.push({ c, r });
+      events.push({ type: 'smash', c, r });
     }
   }
 }

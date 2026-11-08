@@ -118,6 +118,12 @@ export const sfx = {
   defeat() { [392, 349, 311, 262].forEach((f, i) => tone({ freq: f, type: 'triangle', dur: 0.45, vol: 0.22, delay: i * 0.18 })); },
   pulse() { tone({ freq: 140, type: 'sine', dur: 0.4, vol: 0.4, slide: 260 }); noise({ dur: 0.3, vol: 0.2, filter: 700, sweep: 1500 }); },
   rattle() { [0, 0.07, 0.14, 0.21].forEach((d) => noise({ dur: 0.05, vol: 0.3, filter: 2400, q: 4, delay: d })); },
+  // The monsters.
+  shriek() { noise({ dur: 0.9, vol: 0.32, filter: 1800, sweep: 4200, q: 8 }); tone({ freq: 880, type: 'sawtooth', dur: 0.8, vol: 0.06, slide: 500 }); },
+  scuttle() { [0, 0.05, 0.1, 0.15, 0.2, 0.25].forEach((d) => noise({ dur: 0.03, vol: 0.18, filter: 3200, q: 6, delay: d })); },
+  lunge() { noise({ dur: 0.25, vol: 0.35, filter: 600, sweep: 2600, q: 2 }); },
+  smash() { noise({ dur: 0.35, vol: 0.45, filter: 400, type: 'lowpass' }); tone({ freq: 90, type: 'square', dur: 0.2, vol: 0.15, slide: -40 }); },
+  growl() { tone({ freq: 70, type: 'sawtooth', dur: 0.9, vol: 0.12, slide: -20 }); noise({ dur: 0.8, vol: 0.12, filter: 220, type: 'lowpass' }); },
   coin() { tone({ freq: 880, type: 'triangle', dur: 0.1, vol: 0.2 }); tone({ freq: 1320, type: 'triangle', dur: 0.2, vol: 0.2, delay: 0.07 }); },
   click() { tone({ freq: 500, type: 'triangle', dur: 0.06, vol: 0.12 }); },
 };

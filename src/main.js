@@ -12,6 +12,7 @@ import { createScreens, coinTag, formatTime, skinFor } from './screens.js';
 import { drawPreview } from './render.js';
 import { submitScore } from './leaderboard.js';
 import { cleanName, NAME_MAX } from './leaderboard-rules.mjs';
+import { setupMenuNav } from './nav.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -76,8 +77,8 @@ const MENU_ART = ['play', 'shop', 'characters', 'upgrades', 'settings', 'records
 const PRELOAD = [...MENU_ART.map((n) => `assets/img/menu/${n}.png`), 'assets/img/ui/coin.png',
   // The HUD and controls appear the moment a story starts, so they mustn't still be downloading.
   'assets/img/ui/action.png', 'assets/img/ui/joystick.png', 'assets/img/ui/medallion.png', 'assets/img/ui/round.png', 'assets/img/btn-skull.png',
-  'assets/img/v2/hud-lantern.png', 'assets/img/v2/heart-full.png', 'assets/img/v2/heart-empty.png', 'assets/img/bg-cemetery.jpg', 'assets/img/title-logo.webp', 'assets/img/banner-tap.png',
-  'assets/img/banner-select.png', 'assets/img/card-keeper.webp', 'assets/img/card-survivor.webp'];
+  'assets/img/v2/hud-lantern.png', 'assets/img/v2/heart-full.png', 'assets/img/v2/heart-empty.png', 'assets/img/bg-cemetery.jpg', 'assets/img/title-logo.webp',
+  'assets/img/ui/granite.jpg', 'assets/img/card-keeper.webp', 'assets/img/card-survivor.webp'];
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -440,6 +441,29 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
+// Arrows, Enter and Back drive the menus, so the game works with a keyboard or a TV remote.
+setupMenuNav({
+  layer() {
+    if (!$('overlay-tab').hidden) return $('overlay-tab');
+    const top = overlayStack[overlayStack.length - 1];
+    if (top) return top.el;
+    if (state === 'playing' || state === 'boot') return null;
+    return document.querySelector('.screen:not([hidden]):not(.screen-game)');
+  },
+  onBack() {
+    const top = overlayStack[overlayStack.length - 1];
+    if (top) { if (top.el.id === 'overlay-pause') resume(); else closeOverlay(); return; }
+    if (state === 'page') pageBack();
+    else if (state === 'storySelect') goMenu();
+    else if (state === 'intro') goSelect();
+  },
+  onKeyboard() { app.classList.add('keyboard-nav'); },
+});
+
+// Turning a phone upright mid-run pauses it: the game is hidden behind the turn-sideways prompt.
+const upright = matchMedia('(orientation: portrait) and (pointer: coarse)');
+upright.addEventListener?.('change', () => { if (upright.matches) pause(); });
+
 // ---------------- Live announcements & toast ----------------
 
 let lastAnnounce = '';
@@ -784,6 +808,19 @@ function handleEvents(events) {
         announce(ev.hint);
         break;
       case 'spotted': audio.sfx.spotted(); break;
+      case 'scream':
+        audio.sfx.shriek();
+        if (ev.called) { toast('A shriek! The dead are coming', 1600); announce('A screamer shrieked. Nearby zombies are coming.'); }
+        break;
+      case 'stalkerWakes':
+        audio.sfx.growl();
+        toast('Something is following you. Light it up', 2200);
+        announce('The stalker is hunting you. It freezes while your flashlight is on it.');
+        break;
+      case 'rattle': audio.sfx.scuttle(); break;
+      case 'lunge': audio.sfx.lunge(); break;
+      case 'smash': audio.sfx.smash(); break;
+      case 'hit': audio.sfx.hit(); break;
       case 'pulse': audio.sfx.pulse(); break;
       case 'distraction': audio.sfx.rattle(); break;
       case 'skillDenied':
@@ -1026,12 +1063,16 @@ function drawWorld() {
   renderer.draw(run, { time: animTime, reducedMotion: reducedMotion(), insets: viewInsets() });
 }
 
+const landscape = matchMedia('(orientation: landscape)');
 // The HUD and touch controls float over the canvas; the camera keeps the player between them.
 function viewInsets() {
   const vp = $('viewport').getBoundingClientRect();
   const hud = $('hud-sub').getBoundingClientRect();
   const controls = $('controls').getBoundingClientRect();
-  return { top: Math.max(0, hud.bottom - vp.top), bottom: Math.max(0, vp.bottom - controls.top) };
+  // In landscape the touch controls sit in the corners and the camera can use the full height;
+  // on desktop they're hidden. Only an upright screen keeps a band free for them.
+  const bottom = controls.height && !landscape.matches ? Math.max(0, vp.bottom - controls.top) : 0;
+  return { top: Math.max(0, hud.bottom - vp.top), bottom };
 }
 
 new ResizeObserver(() => renderer?.resize()).observe($('viewport'));

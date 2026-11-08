@@ -1,32 +1,34 @@
 :root {
-  --deep: #251638;
-  --violet: #49305f;
-  --lavender: #bba8d3;
-  --stone: #77717e;
-  --stone-dark: #3d3549;
-  --stone-mid: #5a5068;
-  --soul: #baf45a;
-  --amber: #ffd789;
-  --ink: #181020;
-  --danger: #ff8a8a;
-  --text: #f3eefa;
-  --text-dim: #cfc4de;
+  /* Night stone and iron: cold blue-black, weathered granite, bone-white text, a little soul green. */
+  --deep: #0c1117;
+  --violet: #1b2530;
+  --lavender: #a9b6bd;
+  --stone: #6b7074;
+  --stone-dark: #262b31;
+  --stone-mid: #40464d;
+  --soul: #b2e870;
+  --amber: #f2c97a;
+  --ink: #07090c;
+  --danger: #ff8a7a;
+  --text: #ece7dc;
+  --text-dim: #bdb6a8;
   --hud-h: 72px;
   --controls-h: 148px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Lilita One", "Arial Rounded MT Bold", "Arial Black", system-ui, sans-serif;
-  /* Chunky rounded face for buttons, HUD numbers and labels, like the reference kit. */
-  --font-chunky: "Lilita One", "Arial Rounded MT Bold", "Arial Black", system-ui, sans-serif;
+  /* Carved Roman capitals, like letters cut into a headstone. */
+  --font-display: "Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif;
+  --font-chunky: "Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif;
   /* Soft shadow that keeps light text readable on stone, without a hard outline. */
-  --ink-outline: 0 1px 1px rgba(20, 12, 32, .9), 0 2px 5px rgba(20, 12, 32, .75);
+  --ink-outline: 0 1px 1px rgba(0, 0, 0, .95), 0 2px 6px rgba(0, 0, 0, .8);
   /* Matte stone, lit from above. The transparent border of each panel shows the rim. */
-  --stone-rim: linear-gradient(180deg, #a497bf 0%, #877a9f 16%, #6f6388 100%);
-  --slab-bg: linear-gradient(180deg, #9d90b8 0%, #8275a0 18%, #6d6187 100%) border-box;
-  --pill-bg: linear-gradient(180deg, #9689b1 0%, #7d7099 22%, #6a5e84 100%) border-box;
-  --board-bg: linear-gradient(180deg, #443b5a, #4b4262) padding-box, var(--stone-rim) border-box;
-  --stone-edge: inset 0 2px 4px rgba(15, 10, 25, .55), inset 0 -1px 0 rgba(255, 255, 255, .12);
+  --granite: url("assets/img/ui/granite.jpg") center / 192px;
+  --stone-rim: linear-gradient(180deg, rgba(150, 156, 162, .55) 0%, rgba(70, 76, 82, .35) 16%, rgba(20, 24, 28, .55) 100%), var(--granite);
+  --slab-bg: linear-gradient(180deg, rgba(160, 166, 170, .35) 0%, rgba(60, 66, 72, .2) 22%, rgba(12, 15, 19, .5) 100%) border-box, url("assets/img/ui/granite.jpg") center / 192px border-box;
+  --pill-bg: linear-gradient(180deg, rgba(150, 156, 160, .3) 0%, rgba(50, 56, 62, .2) 25%, rgba(12, 15, 19, .55) 100%) border-box, url("assets/img/ui/granite.jpg") center / 192px border-box;
+  --board-bg: linear-gradient(180deg, rgba(18, 22, 28, .9), rgba(24, 29, 36, .92)) padding-box, var(--stone-rim) border-box;
+  --stone-edge: inset 0 2px 5px rgba(0, 0, 0, .7), inset 0 -1px 0 rgba(255, 255, 255, .1);
   color-scheme: dark;
 }
 
@@ -36,7 +38,7 @@ html, body {
   margin: 0;
   height: 100%;
   touch-action: manipulation; /* no double-tap zoom anywhere; menus still scroll */
-  background: #120a1c;
+  background: #0d0e10;
   color: var(--text);
   font-family: var(--font-ui);
   -webkit-tap-highlight-color: transparent;
@@ -87,14 +89,14 @@ img { user-select: none; -webkit-user-drag: none; }
 
 .bg-cemetery {
   background:
-    linear-gradient(180deg, rgba(37, 22, 56, .15) 0%, rgba(24, 16, 32, .55) 100%),
+    linear-gradient(180deg, rgba(6, 10, 16, .15) 0%, rgba(6, 10, 16, .6) 100%),
     url("assets/img/bg-cemetery.jpg") center top / cover no-repeat,
     var(--deep);
 }
 
 .bg-cemetery.dim {
   background:
-    linear-gradient(180deg, rgba(18, 10, 28, .7), rgba(18, 10, 28, .88)),
+    linear-gradient(180deg, rgba(6, 9, 14, .72), rgba(6, 9, 14, .9)),
     url("assets/img/bg-cemetery.jpg") center top / cover no-repeat,
     var(--deep);
 }
@@ -208,8 +210,24 @@ button { font: inherit; }
   touch-action: manipulation;
 }
 
-.banner-btn img { width: 100%; display: block; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .5)); }
-.banner-btn:active img { transform: translateY(3px); }
+/* A carved granite plaque with real words on it, so it reads the same on touch, desktop and TV. */
+.banner-text {
+  display: block;
+  padding: 14px 22px;
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background: var(--slab-bg);
+  box-shadow: var(--stone-edge), 0 0 0 2px rgba(0, 0, 0, .55), 0 6px 14px rgba(0, 0, 0, .6);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 21px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--soul);
+  text-shadow: 0 0 10px rgba(178, 232, 112, .45), var(--ink-outline);
+}
+.banner-btn:active .banner-text { transform: translateY(3px); }
+.select-banner .banner-text { font-size: 18px; padding: 10px 18px; text-align: center; }
 
 /* ---------- Splash ---------- */
 
@@ -397,7 +415,7 @@ button { font: inherit; }
   padding: 1px 7px 2px;
   border-radius: 6px;
   border: 2px solid var(--ink);
-  background: linear-gradient(180deg, #6e6386, #4b4259);
+  background: linear-gradient(180deg, #626a77, #424750);
   color: var(--text);
   box-shadow: 0 2px 0 var(--ink);
 }
@@ -437,7 +455,7 @@ button { font: inherit; }
   align-items: flex-start;
   gap: 8px;
   padding: calc(10px + var(--safe-t)) 12px 4px;
-  background: linear-gradient(180deg, rgba(14, 7, 24, .78) 0%, rgba(14, 7, 24, .45) 70%, rgba(14, 7, 24, 0) 100%);
+  background: linear-gradient(180deg, rgba(10, 11, 12, .78) 0%, rgba(10, 11, 12, .45) 70%, rgba(10, 11, 12, 0) 100%);
   pointer-events: none;
 }
 
@@ -575,7 +593,7 @@ button { font: inherit; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse 75% 60% at 50% 50%, rgba(12, 4, 24, 0) 45%, rgba(12, 4, 24, .6) 100%);
+  background: radial-gradient(ellipse 75% 60% at 50% 50%, rgba(8, 9, 10, 0) 45%, rgba(8, 9, 10, .6) 100%);
 }
 
 .toast {
@@ -609,7 +627,7 @@ button { font: inherit; }
   justify-content: space-between;
   align-items: flex-end;
   padding: 24px 18px calc(14px + var(--safe-b));
-  background: linear-gradient(0deg, rgba(14, 7, 24, .7) 0%, rgba(14, 7, 24, .35) 65%, rgba(14, 7, 24, 0) 100%);
+  background: linear-gradient(0deg, rgba(10, 11, 12, .7) 0%, rgba(10, 11, 12, .35) 65%, rgba(10, 11, 12, 0) 100%);
   touch-action: none;
   user-select: none;
   pointer-events: none;
@@ -700,15 +718,15 @@ button { font: inherit; }
 /* Recessed dark stone rows, like the reference's Points Earned board. */
 .results-table td {
   padding: 8px 12px;
-  background: #1f1a28;
+  background: #1b1d21;
   border-top: 2px solid #120d18;
-  border-bottom: 2px solid #4b4259;
+  border-bottom: 2px solid #424750;
   font-family: var(--font-chunky);
   text-shadow: var(--ink-outline);
 }
 
 .results-table td:first-child { border-left: 2px solid #120d18; border-radius: 8px 0 0 8px; text-transform: uppercase; font-size: 15px; letter-spacing: .5px; }
-.results-table td:last-child { border-right: 2px solid #4b4259; border-radius: 0 8px 8px 0; text-align: right; font-size: 17px; }
+.results-table td:last-child { border-right: 2px solid #424750; border-radius: 0 8px 8px 0; text-align: right; font-size: 17px; }
 .results-table .row-icon { width: 22px; height: 22px; object-fit: contain; vertical-align: -5px; margin-right: 8px; }
 
 .results-total {
@@ -719,9 +737,9 @@ button { font: inherit; }
   margin-top: 8px;
   padding: 8px 10px;
   border-radius: 12px;
-  background: #1f1a28;
+  background: #1b1d21;
   border-top: 2px solid #120d18;
-  border-bottom: 2px solid #4b4259;
+  border-bottom: 2px solid #424750;
 }
 
 .results-total img { width: 46px; height: 64px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(186, 244, 90, .5)); }
@@ -746,7 +764,7 @@ button { font: inherit; }
   align-items: center;
   justify-content: center;
   padding: calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b));
-  background: rgba(12, 6, 20, .72);
+  background: rgba(9, 9, 10, .72);
   overflow-y: auto;
 }
 
@@ -778,14 +796,14 @@ button { font: inherit; }
   height: 12px;
   border-radius: 999px;
   border: 2px solid var(--ink);
-  background: linear-gradient(180deg, #120d18, #2a2333);
-  box-shadow: 0 2px 0 #4b4259;
+  background: linear-gradient(180deg, #120d18, #24272c);
+  box-shadow: 0 2px 0 #424750;
 }
 .setting input[type="range"]::-moz-range-track {
   height: 10px;
   border-radius: 999px;
   border: 2px solid var(--ink);
-  background: linear-gradient(180deg, #120d18, #2a2333);
+  background: linear-gradient(180deg, #120d18, #24272c);
 }
 .setting input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -810,8 +828,8 @@ button { font: inherit; }
   padding: 8px 12px;
   border-radius: 10px;
   border: 2px solid var(--ink);
-  background: linear-gradient(180deg, #2a2333, #1f1a28);
-  box-shadow: inset 0 2px 0 #120d18, 0 2px 0 #4b4259;
+  background: linear-gradient(180deg, #24272c, #1b1d21);
+  box-shadow: inset 0 2px 0 #120d18, 0 2px 0 #424750;
   color: var(--text);
   font: inherit;
 }
@@ -997,7 +1015,7 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 .claim-row { align-items: center; justify-content: space-between; }
 .claim-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; font-size: 14px; }
 .claim-row .stone-btn { flex-shrink: 0; }
-.bar { position: relative; height: 22px; border-radius: 999px; border: 2px solid var(--ink); background: #181020; overflow: hidden; }
+.bar { position: relative; height: 22px; border-radius: 999px; border: 2px solid var(--ink); background: #131417; overflow: hidden; }
 .bar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(180deg, #d5ff85, #7fbe2e); }
 .bar b { position: relative; display: block; text-align: center; font-size: 12px; line-height: 18px; text-shadow: var(--ink-outline); }
 .badge-line { margin: 0; padding: 0 2px; border: 14px solid transparent;
@@ -1033,7 +1051,7 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 .pause-grid .stone-btn { width: 100%; font-size: 18px; }
 .pause-grid .menu-stack { gap: 8px; margin-top: 0; }
 
-.overlay-tab { z-index: 40; background: rgba(12, 6, 20, .92); }
+.overlay-tab { z-index: 40; background: rgba(9, 9, 10, .92); }
 
 /* ---------- Shared leaderboard ---------- */
 
@@ -1046,9 +1064,9 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
   gap: 8px;
   padding: 5px 10px;
   border-radius: 8px;
-  background: #1f1a28;
+  background: #1b1d21;
   border-top: 2px solid #120d18;
-  border-bottom: 2px solid #4b4259;
+  border-bottom: 2px solid #424750;
   font-family: var(--font-chunky);
   font-size: 17px;
   text-shadow: var(--ink-outline);
@@ -1072,9 +1090,9 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
   min-height: 50px;
   padding: 8px 14px;
   border-radius: 14px;
-  border: 2px solid rgba(164, 151, 191, .45);
-  background: linear-gradient(180deg, #2a2338, #362d47);
-  box-shadow: inset 0 2px 5px rgba(10, 6, 18, .6);
+  border: 2px solid rgba(147, 159, 178, .45);
+  background: linear-gradient(180deg, #24272c, #2f3339);
+  box-shadow: inset 0 2px 5px rgba(8, 9, 10, .6);
   color: var(--text);
   caret-color: var(--soul);
   font: inherit;
@@ -1085,7 +1103,7 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 .post-row input:focus {
   outline: 0;
   border-color: var(--soul);
-  box-shadow: inset 0 2px 5px rgba(10, 6, 18, .6), 0 0 8px rgba(186, 244, 90, .45);
+  box-shadow: inset 0 2px 5px rgba(8, 9, 10, .6), 0 0 8px rgba(186, 244, 90, .45);
 }
 .post-row input:disabled { opacity: .7; }
 .post-form .fine-print, .post-form .saved-line, .post-form .warn-line { margin: 6px 0 0; }
@@ -1107,7 +1125,7 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
   gap: 6px;
   margin: 0 -16px;
   padding: 10px 16px calc(10px + var(--safe-b));
-  background: linear-gradient(0deg, rgba(14, 7, 24, .96) 70%, rgba(14, 7, 24, 0));
+  background: linear-gradient(0deg, rgba(10, 11, 12, .96) 70%, rgba(10, 11, 12, 0));
 }
 .results-links { display: flex; gap: 8px; }
 .results-links .stone-btn { flex: 1; min-width: 0; }
@@ -1176,10 +1194,116 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
   .joystick { width: 96px; height: 96px; }
   .joystick-knob { width: 52px; height: 52px; margin: -26px 0 0 -26px; }
   .action-btn { width: 68px; height: 68px; }
-  .splash-reaper { display: none; }
+  .splash-reaper { width: min(26vw, 50vh); }
 }
 
 @media (min-width: 520px) {
-  body { align-items: center; background: radial-gradient(circle at 50% 30%, #2a1840, #0d0714); }
+  body { align-items: center; background: radial-gradient(circle at 50% 30%, #1f2226, #090a0b); }
   .app { max-height: 960px; border-radius: 18px; }
+}
+
+/* ---------- Landscape: the game's home layout on TVs, desktops and phones held sideways ---------- */
+
+.intro-col { display: contents; }
+.results-scroll { display: contents; }
+.rotate-hint { display: none; }
+
+@media (orientation: landscape) {
+  :root { --side: max(16px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)); }
+  body { align-items: stretch; }
+  .app { max-width: none; max-height: none; border-radius: 0; box-shadow: none; }
+  /* Menus keep a readable width in the middle of a wide screen. */
+  .screen:not(.screen-game) { padding-left: max(var(--side), calc((100% - 1180px) / 2)); padding-right: max(var(--side), calc((100% - 1180px) / 2)); }
+  .screen-game .hud { padding-left: calc(var(--side) + 6px); padding-right: calc(var(--side) + 6px); }
+  /* The joystick and buttons float in the bottom corners over the world, with no band behind them. */
+  .screen-game .controls { padding-left: calc(var(--side) + 18px); padding-right: calc(var(--side) + 18px); background: none; }
+  /* Both buttons sit together under the right thumb, clear of the middle where the hero stands. */
+  .screen-game .controls .skill-wrap { margin-left: auto; margin-right: 14px; }
+
+  /* Splash: the reaper and title on the left, the way in on the right. */
+  .screen-splash { flex-direction: row; justify-content: center; align-items: center; gap: calc(4vw / var(--z)); }
+  .splash-stage { flex: 0 1 auto; width: calc(min(46vw, 78vh) / var(--z)); min-height: 0; justify-content: center; padding: 0; }
+  .splash-reaper { width: calc(min(28vw, 44vh) / var(--z)); }
+  .splash-logo { width: calc(min(32vw, 48vh) / var(--z)); }
+  .splash-actions { width: min(calc(40vw / var(--z)), 420px); padding: 0; }
+
+  /* Main menu: title, the big Play stone and the four smaller stones side by side. */
+  .screen-menu {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-rows: auto 1fr auto auto;
+    grid-template-areas: "top top top" "logo play grid" "more more more" "note note note";
+    align-items: center; justify-items: center; column-gap: calc(4vw / var(--z)); row-gap: calc(1.5vh / var(--z));
+  }
+  .screen-menu .topbar { grid-area: top; }
+  .menu-logo { grid-area: logo; width: calc(min(26vw, 44vh) / var(--z)); }
+  .grave-play { grid-area: play; width: calc(min(22vw, 40vh) / var(--z)); }
+  .grave-grid { grid-area: grid; width: calc(min(28vw, 50vh) / var(--z)); }
+  .screen-menu > .stone-btn { grid-area: more; width: min(100%, 340px); }
+  .menu-note { grid-area: note; }
+
+  /* Story select: the two stories side by side, sized to the screen height. */
+  .select-banner { width: calc(min(40vw, 46vh) / var(--z)); margin: 0 auto calc(1vh / var(--z)); }
+  .card-list { width: min(100%, 980px); margin: 0 auto; gap: 3vw; }
+  .story-col { flex-direction: row; align-items: center; gap: 14px; }
+  .screen-select { justify-content: center; }
+  .story-card { flex: 0 0 auto; width: min(46%, calc(56vh / var(--z))); }
+  .card-caption { flex: 1; margin: 0; }
+
+  /* How to play: the story on the left, rules and controls on the right. */
+  .screen-intro { padding-top: calc(52px + var(--safe-t)); }
+  .screen-intro { overflow: hidden; }
+  .intro-panel {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); column-gap: 28px;
+    width: min(100%, 1000px); height: min(100%, 640px); margin: auto;
+  }
+  /* Each column scrolls inside the panel, so Back and Start never leave the screen. */
+  .intro-col { display: block; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(186, 244, 90, .35) transparent; }
+  .intro-col:last-child { display: flex; flex-direction: column; }
+  .intro-col .panel-actions { position: sticky; bottom: 0; margin-top: auto; padding-top: 10px; background: linear-gradient(180deg, rgba(66, 72, 81, 0), #424851 35%); }
+
+  /* Results: the scores on the left, what to do next on the right. */
+  .screen-results { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; column-gap: 28px; padding-top: calc(56px + var(--safe-t)); padding-bottom: 16px; }
+  .screen-results > :first-child, .screen-results > :last-child { margin: 0; }
+  .screen-results { overflow: hidden; }
+  .results-panel { max-height: 100%; display: flex; flex-direction: column; min-height: 0; }
+  .results-scroll { display: block; overflow-y: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: rgba(186, 244, 90, .35) transparent; }
+
+  /* Pages: cards flow into columns instead of one long list. */
+  .card-stack, .more-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 10px; }
+
+  /* Dialogs fit the short side of a phone and scroll when they must. */
+  .overlay-panel { max-height: calc(100dvh - 24px); overflow-y: auto; }
+}
+
+
+/* Big screens are seen from further away: on tall landscape screens (desktops, TVs) the menus and
+   the HUD scale up. Sizes inside them taken from the viewport are divided by --z to match. */
+:root { --z: 1; }
+@media (orientation: landscape) and (min-height: 760px) { :root { --z: 1.25; } }
+@media (orientation: landscape) and (min-height: 900px) { :root { --z: 1.45; } }
+@media (orientation: landscape) and (min-height: 1300px) { :root { --z: 2; } }
+@media (orientation: landscape) and (min-height: 1900px) { :root { --z: 2.6; } }
+@media (orientation: landscape) {
+  .screen:not(.screen-game), .overlay, .screen-game .hud, .screen-game .hud-sub, .screen-game .controls, .toast { zoom: var(--z); }
+}
+
+/* A phone held upright: ask for landscape. */
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-hint {
+    display: flex; position: fixed; inset: 0; z-index: 100;
+    flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: rgba(8, 9, 10, .96); color: var(--text); text-align: center; padding: 24px;
+    font-family: var(--font-chunky); font-size: 20px;
+  }
+  .rotate-phone {
+    width: 46px; height: 80px; border: 4px solid var(--soul); border-radius: 10px;
+    animation: turn-phone 2.4s ease-in-out infinite;
+  }
+}
+@keyframes turn-phone { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+
+/* With a mouse and no touchscreen, play is by keyboard: the touch controls step aside. */
+@media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
+  .screen-game .controls { display: none; }
 }
