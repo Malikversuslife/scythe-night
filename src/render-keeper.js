@@ -10,7 +10,7 @@ import {
 } from './render-common.js';
 
 export const KEEPER_IMAGES = {
-  ...rigFiles(['brute', 'wraith']),
+  ...rigFiles(['brute', 'wraith', 'zombie', 'zgirl']),
   texGround: 'assets/img/v2/tex-ground.jpg',
   texWallTop: 'assets/img/v2/tex-walltop.jpg',
   texWallFront: 'assets/img/v2/tex-wallfront.jpg',
@@ -42,6 +42,7 @@ export const KEEPER_IMAGES = {
   reaperBackHead: 'assets/img/v2/reaper-back-head.png',
   reaperBackBody: 'assets/img/v2/reaper-back-body.png',
   reaperBackArm: 'assets/img/v2/reaper-back-arm.png',
+  reaperBackArmL: 'assets/img/v2/reaper-back-arm-l.png',
   zombieHead: 'assets/img/v2/zombie-head.png',
   zombieBody: 'assets/img/v2/zombie-body.png',
   zombieArm: 'assets/img/v2/zombie-arm.png',
@@ -209,7 +210,7 @@ export function createKeeperRenderer(images) {
       return { swing: -1.15, lean: 1.2, lunge: 26, sink: 10 };
     }
     if (run.cooldown > 0) {
-      const q = clamp(run.cooldown / (KEEPER.slashCooldown - KEEPER.slashDuration), 0, 1) ** 2;
+      const q = clamp(run.cooldown / (run.rules.slashCooldown - KEEPER.slashDuration), 0, 1) ** 2;
       return { swing: -1.15 * q, lean: 1.2 * q, lunge: 26 * q, sink: 10 * q };
     }
     return { swing: 0, lean: 0, lunge: 0, sink: 0 };
@@ -278,11 +279,11 @@ export function createKeeperRenderer(images) {
     const k = sl.t / KEEPER.slashDuration;
     if (k < 0.15) return; // wind-up
     const q = easeOut((k - 0.15) / 0.85);
-    const half = KEEPER.slashHalfAngle;
+    const half = run.rules.slashHalfAngle;
     const a0 = sl.angle - half * 1.1, a1 = sl.angle + half * 1.1;
     const head = lerp(a0, a1, Math.min(1, q * 1.4));
     const tail = lerp(a0, a1, Math.max(0, q * 1.4 - 0.55));
-    const R = KEEPER.slashRange * t * 0.85;
+    const R = run.rules.slashRange * t * 0.85;
     const cx = p.x * t, cy = (p.y - 0.35) * t;
     const N = 18;
     g.save();
@@ -442,7 +443,8 @@ export function createKeeperRenderer(images) {
     shadow(g, p.x * t, (p.y + 0.32) * t, t * 0.42);
     let alpha = 1;
     if (run.invuln > 0 && !reduced) alpha = Math.floor(time * 12) % 2 ? 0.45 : 1;
-    const rig = s.view === 'side' ? RIGS.reaperSide : s.view === 'back' ? RIGS.reaperBack : RIGS.reaper;
+    const base = rigImages.__rig || 'reaper';
+    const rig = RIGS[s.view === 'side' ? `${base}Side` : s.view === 'back' ? `${base}Back` : base];
     // A faint soul-green rim keeps the black robe readable against the dark cemetery.
     g.save();
     g.shadowColor = 'rgba(170, 240, 120, .55)';

@@ -10,8 +10,10 @@ import {
   missionStatus, claimMission, dailyStatus, claimDaily, nextResetMs, journalTierStatus,
   claimJournalTier, hasJournalBadge, claimableCounts,
 } from './progress.js';
-import { drawPreview } from './render.js';
+import { drawPreview, drawShowcase } from './render.js';
 import { fetchBoard } from './leaderboard.js';
+import { heroById, HEROES } from './catalog.js';
+import { buyHero, selectHero, ownsHero } from './progress.js';
 import * as audio from './audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,10 +51,38 @@ function upgradeSummary(upgrades) {
   return parts.length ? parts.join(', ') : 'No upgrades';
 }
 
-export function boardRowsHtml(board) {
-  if (!board.top.length) return '<p class="empty">No scores yet. Play Cemetery Keeper and claim the top spot.</p>';
+// A story's board: Cemetery Keeper rows show the score, Last Survivor rows the escape time.
+// Each row names the hero that set it.
+export function boardRowsHtml(board, campaign = 'keeper') {
+  const story = campaign === 'keeper' ? 'Cemetery Keeper' : 'Last Survivor';
+  if (!board.top.length) return `<p class="empty">No scores yet. Play ${story} and claim the top spot.</p>`;
+  const value = (e) => (campaign === 'keeper' ? e.score.toLocaleString() : formatTime(e.time));
+  const heroName = (e) => (e.hero ? escapeHtml(heroById(e.hero)?.name ?? '') : '');
   return `<ol class="board-list">${board.top.map((e) => `<li class="board-row${e.rank <= 3 ? ` top-${e.rank}` : ''}${board.you && board.you.rank === e.rank ? ' mine' : ''}">
-      <span class="board-rank">${e.rank}</span><span class="board-name">${escapeHtml(e.name)}</span><span class="board-score">${e.score.toLocaleString()}</span></li>`).join('')}</ol>`;
+      <span class="board-rank">${e.rank}</span><span class="board-name">${escapeHtml(e.name)}<small class="board-hero">${heroName(e)}</small></span><span class="board-score">${value(e)}</span></li>`).join('')}</ol>`;
+}
+
+// A hero's strengths as five-point bars with a short note, against the story's free hero.
+function heroStats(h) {
+  const k = h.perks || {};
+  if (h.campaign === 'keeper') {
+    const hearts = k.maxHealth ?? 3;
+    const reach = k.slashRange ?? 1, arc = k.slashArc ?? 1, swing = k.slashCooldown ?? 1, pulse = k.pulseCooldown ?? 1;
+    return [
+      { label: 'Hearts', value: Math.min(5, hearts), text: `${hearts} hearts` },
+      { label: 'Reach', value: reach > 1 ? 4 : 2, text: reach > 1 ? `×${reach.toFixed(1)} longer slash` : 'Standard slash' },
+      { label: 'Sweep', value: arc > 1 ? 4 : 2, text: arc > 1 ? 'Wide slash' : 'Standard arc' },
+      { label: 'Speed', value: swing < 1 ? 4 : 2, text: swing < 1 ? 'Quick swings' : 'Steady swings' },
+      { label: 'Pulse', value: (pulse < 1 ? 4 : 2) + (k.pulseWounds ? 1 : 0), text: k.pulseWounds ? 'Pulse wounds the undead' : pulse < 1 ? 'Recovers faster' : 'Shoves them back' },
+    ];
+  }
+  const blade = k.blade ?? 1, gun = k.pistolLevel ?? 0, speed = k.speed ?? 1;
+  return [
+    { label: 'Knife', value: blade + 1, text: blade >= 2 ? 'Sharpened knife' : 'Knife' },
+    { label: 'Pistol', value: gun === 0 ? 0 : gun + 2, text: gun === 0 ? 'Buy one in Upgrades' : `${k.rounds} rounds${gun >= 2 ? ' that can kill' : ''}` },
+    { label: 'Speed', value: speed > 1 ? 4 : 3, text: speed > 1 ? `${Math.round((speed - 1) * 100)}% faster` : 'Quick and quiet' },
+    { label: 'Grit', value: k.secondWind ? 4 : 2, text: k.secondWind ? 'Shakes off the first catch' : 'One touch ends it' },
+  ];
 }
 
 const escapeHtml = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -60,7 +90,8 @@ const escapeHtml = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 export function createScreens({ store, images, confirmDialog, openOverlay, closeOverlay, announce, startEvent, refreshGlobal, openPage, playerId }) {
   let current = null;
   let note = '';
-  const charView = { tab: 'keeper', preview: {} };
+  const charView = { tab: 'keeper', preview: {}, hero: {} };
+  const boardView = { campaign: 'keeper' };
 
   const walletText = () => `You have ${store.data.wallet.graveCoins} Grave Coins.`;
 
@@ -83,7 +114,7 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
         const tile = (route, art, label, count, cls = '') => `
           <button class="grave-btn ${cls}" type="button" data-act="route" data-id="${route}" data-key="route-${route}">
             <img src="assets/img/menu/${art}.png" alt="" draggable="false">
-            ${cls ? `<span class="plaque-label">${label}</span>` : `<span class="grave-label">${label}</span>`}
+            <span class="grave-label" style="--len: ${label.length}">${label}</span>
             ${count ? `<span class="badge" aria-label="${count} ready to claim">${count}</span>` : ''}
           </button>`;
         return `<div class="grave-grid more-grid">
@@ -118,34 +149,69 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
       title: 'Characters',
       html() {
         const d = store.data, tab = charView.tab;
-        const who = tab === 'keeper'
-          ? { name: 'Pip', desc: 'The small reaper who keeps Hush Hollow.' }
-          : { name: 'Mara', desc: 'A late-working courier, out of time and out of the city.' };
+        const heroes = HEROES.filter((h) => h.campaign === tab);
+        const shown = heroById(charView.hero[tab] ?? d.heroes.selected[tab]);
+        const free = heroes.find((h) => h.cost === 0);
+        const stateOf = (h) => (d.heroes.selected[tab] === h.id ? 'playing' : ownsHero(d, h.id) ? 'owned' : 'locked');
+
+        // The roster: every hero in this story, as a portrait card.
+        const roster = heroes.map((h) => {
+          const st = stateOf(h);
+          const tag = st === 'playing' ? '<span class="hero-tag on">✓ Playing</span>'
+            : st === 'owned' ? '<span class="hero-tag">Owned</span>' : `<span class="hero-tag locked">${coinTag(h.cost)}</span>`;
+          return `<button class="hero-card${h === shown ? ' shown' : ''}${st === 'locked' ? ' is-locked' : ''}" type="button" data-act="hero" data-id="${h.id}" data-key="hero-${h.id}" aria-pressed="${h === shown}">
+              <canvas class="hero-portrait" data-hero-portrait="${h.id}" aria-hidden="true"></canvas>
+              <strong>${h.name}</strong>${tag}
+            </button>`;
+        }).join('');
+
+        // The showcase: the chosen hero walking and turning, what they're like, and what to do.
+        const st = stateOf(shown);
+        const coins = d.wallet.graveCoins;
+        const action = st === 'playing' ? `<p class="done-line">✓ You play as ${shown.name} in ${tab === 'keeper' ? 'Cemetery Keeper' : 'Last Survivor'}</p>`
+          : st === 'owned' ? `<button class="stone-btn primary" type="button" data-act="hero-select" data-id="${shown.id}" data-key="hero-select">Play as ${shown.name}</button>`
+          : `<div class="row-end">${coinTag(shown.cost)}<button class="stone-btn primary" type="button" data-act="hero-buy" data-id="${shown.id}" data-key="hero-buy">Unlock</button></div>
+             ${coins < shown.cost ? `<p class="fine-print">\u{1F512} You need ${shown.cost - coins} more coins.</p>` : ''}`;
+        const stats = heroStats(shown).map((x) => `<li><span>${x.label}</span><span class="pips" aria-label="${x.value} of 5">${'<i class="on"></i>'.repeat(x.value)}${'<i></i>'.repeat(5 - x.value)}</span><small>${x.text}</small></li>`).join('');
+        const showcase = `<div class="stone-card hero-show">
+            <canvas class="hero-stage" data-showcase="${shown.id}" aria-hidden="true"></canvas>
+            <div class="hero-about">
+              <h2 class="char-name">${shown.name}</h2><p class="hero-sub">${shown.title}</p>
+              <p>${shown.desc}</p>
+              <ul class="hero-stats">${stats}</ul>
+              ${action}
+            </div>
+          </div>`;
+
+        // Looks: the costumes, each with a picture of itself. Only the free hero wears them.
         const slots = SLOTS[tab].map((slot) => {
           const options = COSMETICS.filter((c) => c.campaign === tab && c.slot === slot).map((c) => {
             const owned = ownsCosmetic(d, c.id);
             const equipped = d.equippedByCampaign[tab][slot] === c.id;
             const previewing = (charView.preview[slot] ?? d.equippedByCampaign[tab][slot]) === c.id;
             const status = equipped ? '✓ Equipped' : owned ? '✓ Owned' : '\u{1F512} Locked';
-            const action = equipped ? ''
+            const act = equipped ? ''
               : owned ? `<button class="stone-btn small" type="button" data-act="equip" data-id="${c.id}" data-key="equip-${c.id}">Equip</button>`
               : `<button class="stone-btn small" type="button" data-act="item" data-id="${c.id}" data-key="item-${c.id}">See in shop</button>`;
-            return `<div class="option${previewing ? ' selected' : ''}">
+            return `<div class="option look${previewing ? ' selected' : ''}">
               <button class="option-main" type="button" data-act="preview" data-id="${c.id}" data-key="preview-${c.id}" aria-pressed="${previewing}">
-                <strong>${c.name}</strong><small>${status}</small>
-              </button>${action}
+                <canvas class="thumb" data-preview="${c.id}" aria-hidden="true"></canvas>
+                <span><strong>${c.name}</strong><small>${status}</small></span>
+              </button>${act}
             </div>`;
           }).join('');
-          return `<h2 class="panel-heading">${SLOT_LABELS[slot]}</h2>${options}`;
+          return `<h3 class="look-heading">${SLOT_LABELS[slot]}</h3><div class="look-grid">${options}</div>`;
         }).join('');
-        return `<div class="tabs" role="group" aria-label="Campaign">
-            <button class="stone-btn small${tab === 'keeper' ? ' primary' : ''}" type="button" data-act="tab" data-id="keeper" data-key="tab-keeper" aria-pressed="${tab === 'keeper'}">Keeper</button>
-            <button class="stone-btn small${tab === 'survivor' ? ' primary' : ''}" type="button" data-act="tab" data-id="survivor" data-key="tab-survivor" aria-pressed="${tab === 'survivor'}">Survivor</button>
+
+        return `<div class="tabs" role="group" aria-label="Story">
+            <button class="stone-btn small${tab === 'keeper' ? ' primary' : ''}" type="button" data-act="tab" data-id="keeper" data-key="tab-keeper" aria-pressed="${tab === 'keeper'}">Story 1: Keeper</button>
+            <button class="stone-btn small${tab === 'survivor' ? ' primary' : ''}" type="button" data-act="tab" data-id="survivor" data-key="tab-survivor" aria-pressed="${tab === 'survivor'}">Story 2: Survivor</button>
           </div>
-          <div class="stone-card char-head">
-            <canvas class="char-preview" data-char-preview aria-hidden="true"></canvas>
-            <div><h2 class="char-name">${who.name}</h2><p>${who.desc}</p><p class="fine-print">Tap a look to preview it. Equipped looks apply from your next run.</p></div>
-          </div>
+          <h2 class="panel-heading">Heroes</h2>
+          <div class="hero-roster">${roster}</div>
+          ${showcase}
+          <h2 class="panel-heading">Looks for ${free.name}</h2>
+          <p class="page-intro">Tap a look to try it on ${free.name}. Equipped looks apply from your next run; the other heroes wear their own.</p>
           ${slots}`;
       },
     },
@@ -160,13 +226,17 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
           const cost = u.costs[level];
           const short = !maxed && d.wallet.graveCoins < cost;
           const skill = u.campaign === 'keeper' ? 'Cemetery Keeper' : 'Last Survivor';
+          // Each card shows the thing it improves.
           return `<div class="stone-card upgrade">
+            <img class="upgrade-art" src="assets/img/items/${u.art}.png" alt="" draggable="false">
+            <div class="upgrade-body">
             <div class="upgrade-top"><strong>${u.name}</strong><small>${skill} · Level ${level} of ${u.costs.length}</small></div>
             <p>Now: ${u.format(u.values[level])}</p>
             ${maxed ? '<p class="done-line">✓ Maximum level</p>' : `<p>Next: ${u.format(u.values[level + 1])}</p>
               <div class="row-end">${coinTag(cost)}
                 <button class="stone-btn small primary" type="button" data-act="upgrade" data-id="${u.id}" data-key="upgrade-${u.id}"${short ? ' disabled' : ''}>Buy</button></div>
               ${short ? `<p class="fine-print">\u{1F512} You need ${cost - d.wallet.graveCoins} more coins.</p>` : ''}`}
+            </div>
           </div>`;
         }).join('');
         return `<p class="page-intro">Permanent on this save, and locked in when a run starts. Upgrades never change health, gate breaches, one-touch failure or how far zombies see.</p><div class="card-stack">${rows}</div>`;
@@ -185,9 +255,14 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
           return `<li class="run-row"><strong>${mode}</strong> <span class="${x.result}">${x.result === 'victory' ? '✓ Won' : '✗ Lost'}</span>
             <small>${formatTime(x.time)}${x.score !== null ? ` · Score ${x.score.toLocaleString()}` : ''} · +${x.coins} coins · ${x.eventId ? 'Event rules' : 'Standard'} · ${upgradeSummary(x.upgrades)}</small></li>`;
         }).join('');
+        const tab = boardView.campaign;
+        const tabBtn = (c, label) => `<button class="stone-btn small${tab === c ? ' primary' : ''}" type="button" data-board-tab="${c}" aria-pressed="${tab === c}">${label}</button>`;
         return `<h2 class="panel-heading">Top ${TOP_COUNT}: all players</h2>
+          <div class="tabs" role="group" aria-label="Choose a story's leaderboard">${tabBtn('keeper', 'Story 1: Keeper')}${tabBtn('survivor', 'Story 2: Survivor')}</div>
           <div class="stone-card board-card" id="board-slot"><p class="board-status">Loading the top scores\u2026</p></div>
-          <p class="fine-print">Cemetery Keeper scores, highest first; ties go to the faster run. Each player's best run counts.</p>
+          <p class="fine-print">${tab === 'keeper'
+            ? 'Cemetery Keeper scores, highest first; ties go to the faster run.'
+            : 'Last Survivor escapes, fastest first. Only runs that reach the refuge count.'} Each player's best run counts.</p>
           <h2 class="panel-heading">Your records</h2>
           ${hasJournalBadge(d) ? '<p class="badge-line">\u{1F3C5} Journal Keeper</p>' : ''}
           <div class="stat-grid">
@@ -291,12 +366,43 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
 
   // ---------------- Rendering ----------------
 
+  // A hero's art: the free hero wears the equipped (or previewed) looks; the others their own.
+  function heroOverrides(h) {
+    const tab = h.campaign;
+    if (h.cost === 0) return skinFor(images, SLOTS[tab].map((slot) => charView.preview[slot] ?? store.data.equippedByCampaign[tab][slot])).overrides;
+    const o = {};
+    for (const [k, path] of Object.entries(h.skin)) if (images[path]) o[k] = images[path];
+    if (h.rig) o.__rig = h.rig;
+    return o;
+  }
+
+  let showcaseFrame = 0;
+  function animateShowcase() {
+    cancelAnimationFrame(showcaseFrame);
+    const cv = document.querySelector('#page-body canvas[data-showcase]');
+    if (!cv) return;
+    const h = heroById(cv.dataset.showcase), o = heroOverrides(h);
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const t0 = performance.now();
+    const tick = (now) => {
+      if (!cv.isConnected) return;
+      drawShowcase(cv, h.campaign, images, o, still ? 0 : Math.max(0, now - t0) / 1000);
+      if (!still) showcaseFrame = requestAnimationFrame(tick);
+    };
+    showcaseFrame = requestAnimationFrame(tick);
+  }
+
   function drawPreviews() {
     for (const cv of document.querySelectorAll('#page-body canvas[data-preview]')) {
       const c = cosmeticById(cv.dataset.preview);
       const others = Object.entries(store.data.equippedByCampaign[c.campaign]).filter(([slot]) => slot !== c.slot).map(([, id]) => id);
       drawPreview(cv, c.campaign, images, skinFor(images, [...others, c.id]).overrides);
     }
+    for (const cv of document.querySelectorAll('#page-body canvas[data-hero-portrait]')) {
+      const h = heroById(cv.dataset.heroPortrait);
+      drawPreview(cv, h.campaign, images, heroOverrides(h));
+    }
+    animateShowcase();
     const cv = document.querySelector('#page-body canvas[data-char-preview]');
     if (cv) {
       const tab = charView.tab;
@@ -324,16 +430,27 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
 
   // Fills the slot when the answer arrives, unless the player has moved on.
   async function loadBoard() {
-    const board = await fetchBoard(playerId());
+    const campaign = boardView.campaign;
+    const board = await fetchBoard(playerId(), fetch, campaign);
     const slot = $('board-slot');
-    if (!slot) return;
+    if (!slot || boardView.campaign !== campaign) return;
     if (!board.ok) {
       slot.innerHTML = `<p class="board-status">\u26A0 ${board.error} Your own records below are still here.</p>`;
       return;
     }
-    const you = board.you ? `<p class="board-you">Your best: #${board.you.rank} with ${board.you.score.toLocaleString()}</p>` : '';
-    slot.innerHTML = boardRowsHtml(board) + you;
+    const best = board.you && (campaign === 'keeper' ? board.you.score.toLocaleString() : formatTime(board.you.time));
+    const you = board.you ? `<p class="board-you">Your best: #${board.you.rank} with ${best}</p>` : '';
+    slot.innerHTML = boardRowsHtml(board, campaign) + you;
   }
+
+  // The story tabs above the board.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-board-tab]');
+    if (!b || current !== 'records') return;
+    boardView.campaign = b.dataset.boardTab;
+    render('records');
+    document.querySelector(`[data-board-tab="${boardView.campaign}"]`)?.focus({ preventScroll: true });
+  });
 
   const rerender = () => { if (current) render(current, { keepFocus: true }); };
 
@@ -420,6 +537,15 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
     $('item-actions').querySelector('button')?.focus({ preventScroll: true });
   });
 
+  async function unlockHero(h) {
+    const coins = store.data.wallet.graveCoins;
+    if (coins < h.cost) { audio.sfx.denied(); setNote(`You need ${h.cost - coins} more Grave Coins for ${h.name}.`); rerender(); return; }
+    if (!(await confirmDialog(`Unlock ${h.name}?`, `This spends ${h.cost} of your ${coins} Grave Coins.`, 'Unlock'))) return;
+    const r = store.transact((d) => buyHero(d, h.id, Date.now()));
+    if (r.ok) { audio.sfx.coin(); setNote(`${h.name} unlocked! You'll play as ${h.name}.`); } else audio.sfx.denied();
+    refreshGlobal(); rerender();
+  }
+
   // ---------------- Delegated actions ----------------
 
   $('page-body').addEventListener('click', (e) => {
@@ -431,6 +557,14 @@ export function createScreens({ store, images, confirmDialog, openOverlay, close
       case 'route': openPage(id); break;
       case 'item': openItem(id); break;
       case 'tab': charView.tab = id; charView.preview = {}; rerender(); break;
+      case 'hero': audio.sfx.click(); charView.hero[charView.tab] = id; rerender(); break;
+      case 'hero-select': {
+        const h = heroById(id);
+        if (store.transact((d) => selectHero(d, id)).ok) { audio.sfx.click(); setNote(`You'll play as ${h.name}.`); }
+        refreshGlobal(); rerender();
+        break;
+      }
+      case 'hero-buy': unlockHero(heroById(id)); break;
       case 'preview': charView.preview[cosmeticById(id).slot] = id; rerender(); break;
       case 'equip': {
         const r = store.transact((d) => equipCosmetic(d, id));

@@ -48,10 +48,10 @@ export const KEEPER = {
     { count: 6, speed: 1.5, interval: 2.0, specials: ['brute'] },
     { count: 8, speed: 1.65, interval: 1.7, specials: ['wraith', 'brute', 'wraith'] },
   ],
-  // Brutes take three slashes and barely feel the Soul Pulse. Wraiths drift through walls
+  // Brutes take four slashes and barely feel the Soul Pulse; wraiths take two. Wraiths drift through walls
   // and can only be hit, or hurt you, while they're solid.
-  brute: { hp: 3, speed: 0.72, r: 0.42, knock: 0.5, pulse: 0.3 },
-  wraith: { speed: 0.8, solidFor: 2.2, mistFor: 1.3 },
+  brute: { hp: 4, speed: 0.72, r: 0.42, knock: 0.5, pulse: 0.3 },
+  wraith: { hp: 2, speed: 0.8, solidFor: 2.2, mistFor: 1.3 },
   intermission: 1.5,
   score: KEEPER_SCORE,
 };
@@ -74,7 +74,15 @@ export function keeperRules(loadout = {}) {
   const waves = counts
     ? counts.map((count, i) => ({ ...KEEPER.waves[KEEPER.waves.length - counts.length + i], count }))
     : KEEPER.waves;
-  return { waves, pulseCooldown: loadout.pulseCooldown ?? 18, soulReach: loadout.soulReach ?? 1 };
+  // The hero's perks scale the base numbers: hearts, slash reach, arc and speed, and the pulse.
+  return {
+    waves, pulseCooldown: loadout.pulseCooldown ?? 18, soulReach: loadout.soulReach ?? 1,
+    maxHealth: loadout.maxHealth ?? KEEPER.maxHealth,
+    slashRange: KEEPER.slashRange * (loadout.slashRange ?? 1),
+    slashHalfAngle: Math.min(Math.PI * 0.95, KEEPER.slashHalfAngle * (loadout.slashArc ?? 1)),
+    slashCooldown: KEEPER.slashCooldown * (loadout.slashCooldown ?? 1),
+    pulseWounds: !!loadout.pulseWounds,
+  };
 }
 
 export function createKeeperRun(seed = Date.now(), loadout = {}) {
@@ -91,7 +99,7 @@ export function createKeeperRun(seed = Date.now(), loadout = {}) {
     spawns: map.marks.S,
     gate: gates[0],
     player: { x: start.c + 0.5, y: start.r + 0.5, r: KEEPER.playerRadius, fx: 0, fy: -1, moving: false },
-    health: KEEPER.maxHealth,
+    health: rules.maxHealth,
     breaches: 0,
     invuln: 0,
     cooldown: 0,
@@ -146,7 +154,7 @@ export function stepKeeper(run, input, dt) {
     if (run.slash.t >= KEEPER.slashDuration) run.slash = null;
   }
   if (input.action && run.cooldown === 0) {
-    run.cooldown = KEEPER.slashCooldown;
+    run.cooldown = run.rules.slashCooldown;
     run.slash = { t: 0, angle: Math.atan2(p.fy, p.fx) };
     events.push({ type: 'slash' });
     for (const e of run.enemies) {
@@ -192,7 +200,19 @@ export function stepKeeper(run, input, dt) {
       e.push = { vx: (ux * sk.push * k) / sk.pushTime, vy: (uy * sk.push * k) / sk.pushTime, t: sk.pushTime };
       e.target = null;
       pushed++;
+      // The Bone King's pulse also wounds: it takes a slash's worth from each undead it throws.
+      if (run.rules.pulseWounds) {
+        e.hp = (e.hp ?? 1) - 1;
+        if (e.hp <= 0) {
+          e.dead = true;
+          run.stats.defeated++;
+          award(run, 'defeat', events);
+          run.souls.push({ id: run.nextId++, x: e.x, y: e.y, born: run.time });
+          events.push({ type: 'defeat', x: e.x, y: e.y });
+        }
+      }
     }
+    if (run.rules.pulseWounds) run.enemies = run.enemies.filter((e) => !e.dead);
     events.push({ type: 'pulse', x: p.x, y: p.y, pushed });
   }
 
@@ -226,7 +246,7 @@ export function stepKeeper(run, input, dt) {
         run.enemies.push({
           id: run.nextId++, kind,
           x: tile.c + 0.5, y: tile.r + 0.5, r: kind === 'brute' ? b.r : KEEPER.enemyRadius,
-          hp: kind === 'brute' ? b.hp : 1,
+          hp: kind === 'brute' ? b.hp : kind === 'wraith' ? KEEPER.wraith.hp : 1,
           state: 'rising', rise: KEEPER.spawnWarning,
           target: null, speed: wave.speed * (kind === 'brute' ? b.speed : kind === 'wraith' ? KEEPER.wraith.speed : 1), fx: 0, fy: 1,
         });
@@ -321,10 +341,10 @@ export function slashHits(run, e) {
   const p = run.player;
   const dx = e.x - p.x, dy = e.y - p.y;
   const d = Math.hypot(dx, dy);
-  if (d > KEEPER.slashRange + e.r) return false;
+  if (d > (run.rules?.slashRange ?? KEEPER.slashRange) + e.r) return false;
   if (d > 0.05) {
     const cos = (dx * p.fx + dy * p.fy) / d;
-    if (cos < Math.cos(KEEPER.slashHalfAngle)) return false;
+    if (cos < Math.cos(run.rules?.slashHalfAngle ?? KEEPER.slashHalfAngle)) return false;
   }
   return lineOfSight(run.map, p.x, p.y, e.x, e.y);
 }

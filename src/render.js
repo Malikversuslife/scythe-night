@@ -49,6 +49,31 @@ export function createRenderer(canvas, images) {
   };
 }
 
+// A hero walking on the spot and turning, for the Characters page: front, side, back, other side.
+export function drawShowcase(canvas, campaign, images, overrides, time) {
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || 200, h = rect.height || 260;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const base = overrides.__rig || (campaign === 'keeper' ? 'reaper' : 'mara');
+  const step = ((Math.floor(time / 2.6) % 4) + 4) % 4;
+  const rig = RIGS[[base, `${base}Side`, `${base}Back`, `${base}Side`][step]];
+  const cycle = time * 7;
+  const p = pose({ t: time, walk: 1, flow: 1, cycle, bob: Math.abs(Math.sin(cycle)) * 4 });
+  // A soft pool of light under the hero.
+  ctx.save();
+  ctx.translate(w / 2, h * 0.93); ctx.scale(1, 0.28);
+  const g = ctx.createRadialGradient(0, 0, 2, 0, 0, w * 0.4);
+  g.addColorStop(0, 'rgba(186, 244, 90, .24)'); g.addColorStop(1, 'rgba(186, 244, 90, 0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, w * 0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  drawRig(ctx, { ...images, ...overrides }, rig, p, w / 2, h * 0.93, h * 0.84, { flip: step === 3 });
+}
+
 // Standing character for menus: same rig and art as in play.
 export function drawPreview(canvas, campaign, images, overrides = {}) {
   const rect = canvas.getBoundingClientRect();
@@ -59,10 +84,10 @@ export function drawPreview(canvas, campaign, images, overrides = {}) {
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  const rig = campaign === 'keeper' ? RIGS.reaper : RIGS.mara;
+  const rig = RIGS[overrides.__rig || (campaign === 'keeper' ? 'reaper' : 'mara')];
   const skin = { ...images, ...overrides };
   // The rig's art hangs a little below its feet (scythe, lantern), so stand it above the base.
-  drawRig(ctx, skin, rig, pose(), w / 2, h * 0.86, h * 0.8);
+  drawRig(ctx, skin, rig, pose(), w / 2, h * 0.94, h * 0.9);
 }
 
 // Arrow on the edge of the play band pointing at an offscreen world point.

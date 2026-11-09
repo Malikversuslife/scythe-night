@@ -50,6 +50,22 @@ export function findAvenues(map) {
 
 const inBand = (bands, v) => bands.some(([a, b]) => v >= a && v <= b);
 
+// Lane paint worn away on about a third of the tiles.
+const worn = (c, r) => hash(c, r, 47) < 0.35;
+
+// Ground debris: where each kind may lie (the road, the sidewalks), its size in tiles, how
+// strongly it shows, and whether it lies at any angle.
+const DECALS = [
+  { img: 'decalManhole', road: true, walk: false, size: 0.7, alpha: 0.9, turn: true },
+  { img: 'decalPuddle', road: true, walk: true, size: 1.1, alpha: 0.75, turn: true },
+  { img: 'decalPapers', road: true, walk: true, size: 0.8, alpha: 0.8, turn: true },
+  { img: 'decalBlood', road: true, walk: true, size: 0.9, alpha: 0.6, turn: true },
+  { img: 'decalRubble', road: false, walk: true, size: 0.7, alpha: 0.95, turn: true },
+  { img: 'decalLeaves', road: true, walk: true, size: 0.8, alpha: 0.85, turn: true },
+  { img: 'decalGlass', road: true, walk: true, size: 0.6, alpha: 0.8, turn: true },
+  { img: 'decalOil', road: true, walk: false, size: 1.0, alpha: 0.7, turn: true },
+];
+
 // Streets, sidewalks, the plaza and the park, drawn once.
 export function buildCityGround(map, images, t, dpr, zones) {
   const { cv, g } = offscreen(map.w * t, map.h * t, dpr);
@@ -66,8 +82,7 @@ export function buildCityGround(map, images, t, dpr, zones) {
       if (!inBand(av.rows, r) && !inBand(av.cols, c)) g.fillRect(c * t, r * t, t + 0.5, t + 0.5);
     }
   }
-  if (zones.park) {
-    const { c0, r0, c1, r1 } = zones.park;
+  for (const { c0, r0, c1, r1 } of zones.parks || []) {
     g.fillStyle = tilePattern(g, images.texGrass, t, 1.8);
     g.fillRect((c0 + 0.12) * t, (r0 + 0.12) * t, (c1 - c0 + 0.76) * t, (r1 - r0 + 0.76) * t);
     g.strokeStyle = 'rgba(150, 140, 160, .7)';
@@ -76,7 +91,8 @@ export function buildCityGround(map, images, t, dpr, zones) {
   }
 
   // Lane markings: a dashed centre line down each two-lane avenue, broken at junctions.
-  g.strokeStyle = 'rgba(232, 214, 140, .75)';
+  // Paint that nobody has renewed: faded, and worn away in places (see `worn`).
+  g.strokeStyle = 'rgba(214, 196, 132, .32)';
   g.lineWidth = Math.max(1.5, t * 0.045);
   g.setLineDash([t * 0.42, t * 0.34]);
   for (const [a, b] of av.rows) {
@@ -87,7 +103,11 @@ export function buildCityGround(map, images, t, dpr, zones) {
     for (let c = 1; c < map.w - 1; c++) {
       const crossing = inBand(av.cols, c);
       if (!crossing && run === null) run = c;
-      if ((crossing || c === map.w - 2) && run !== null) { const end = crossing ? c : c + 1; g.moveTo((run + 0.15) * t, y); g.lineTo((end - 0.15) * t, y); run = null; }
+      if ((crossing || c === map.w - 2) && run !== null) {
+        const end = crossing ? c : c + 1;
+        for (let x = run; x < end; x++) if (!worn(x, b)) { g.moveTo((x + (x === run ? 0.15 : 0)) * t, y); g.lineTo((x + 1 - (x === end - 1 ? 0.15 : 0)) * t, y); }
+        run = null;
+      }
     }
     g.stroke();
   }
@@ -99,19 +119,25 @@ export function buildCityGround(map, images, t, dpr, zones) {
     for (let r = 1; r < map.h - 1; r++) {
       const crossing = inBand(av.rows, r);
       if (!crossing && run === null) run = r;
-      if ((crossing || r === map.h - 2) && run !== null) { const end = crossing ? r : r + 1; g.moveTo(x, (run + 0.15) * t); g.lineTo(x, (end - 0.15) * t); run = null; }
+      if ((crossing || r === map.h - 2) && run !== null) {
+        const end = crossing ? r : r + 1;
+        for (let y = run; y < end; y++) if (!worn(b, y)) { g.moveTo(x, (y + (y === run ? 0.15 : 0)) * t); g.lineTo(x, (y + 1 - (y === end - 1 ? 0.15 : 0)) * t); }
+        run = null;
+      }
     }
     g.stroke();
   }
   g.setLineDash([]);
 
-  // Crosswalks on each side of every junction.
-  g.fillStyle = 'rgba(236, 232, 240, .78)';
+  // Crosswalks on each side of every junction, chipped and faded; a few stripes are gone.
   const zebra = (x, y, w, h, vertical) => {
     const n = 6;
     for (let i = 0; i < n; i++) {
-      if (vertical) g.fillRect(x + (w / n) * i + w / n * 0.2, y, w / n * 0.6, h);
-      else g.fillRect(x, y + (h / n) * i + h / n * 0.2, w, h / n * 0.6);
+      const k = hash(Math.round(x + i * 7), Math.round(y), 41);
+      if (k < 0.18) continue;
+      g.fillStyle = `rgba(214, 210, 220, ${(0.18 + k * 0.22).toFixed(2)})`;
+      if (vertical) g.fillRect(x + (w / n) * i + w / n * 0.2, y, w / n * 0.6, h * (0.7 + k * 0.3));
+      else g.fillRect(x, y + (h / n) * i + h / n * 0.2, w * (0.7 + k * 0.3), h / n * 0.6);
     }
   };
   for (const [ra, rb] of av.rows) {
@@ -132,8 +158,8 @@ export function buildCityGround(map, images, t, dpr, zones) {
   const ring = (fill) => { g.fillStyle = fill; g.fillRect(0, 0, W, t); g.fillRect(0, H - t, W, t); g.fillRect(0, 0, t, H); g.fillRect(W - t, 0, t, H); };
   ring(hedge);
   ring('rgba(8, 10, 22, .55)');
-  g.strokeStyle = 'rgba(200, 192, 206, .8)';
-  g.lineWidth = Math.max(1.5, t * 0.045);
+  g.strokeStyle = 'rgba(118, 112, 124, .7)';
+  g.lineWidth = Math.max(1.5, t * 0.05);
   g.strokeRect(t, t, W - 2 * t, H - 2 * t);
 
   // Sidewalks with a kerb around every building.
@@ -142,13 +168,42 @@ export function buildCityGround(map, images, t, dpr, zones) {
     const x0 = (b.c0 - walk) * t, y0 = (b.r0 - walk) * t, w = (b.w + walk * 2) * t, h = (b.h + walk * 2) * t;
     g.fillStyle = paving;
     g.fillRect(x0, y0, w, h);
-    g.strokeStyle = 'rgba(200, 192, 206, .8)';
-    g.lineWidth = Math.max(1.5, t * 0.045);
+    g.strokeStyle = 'rgba(118, 112, 124, .7)';
+    g.lineWidth = Math.max(1.5, t * 0.05);
     g.strokeRect(x0, y0, w, h);
-    g.strokeStyle = 'rgba(10, 6, 18, .45)';
+    g.strokeStyle = 'rgba(6, 4, 12, .6)';
     g.lineWidth = Math.max(1, t * 0.03);
     g.strokeRect(x0 - t * 0.03, y0 - t * 0.03, w + t * 0.06, h + t * 0.06);
+    // Grime gathers in the gutter along the kerb.
+    g.strokeStyle = 'rgba(4, 3, 10, .28)';
+    g.lineWidth = t * 0.22;
+    g.strokeRect(x0 - t * 0.14, y0 - t * 0.14, w + t * 0.28, h + t * 0.28);
   }
+
+  // Debris left where it fell: litter, rubble, glass, leaves, puddles and stains, and the odd
+  // manhole in the road. Placed by each tile's own seed, so it never moves.
+  for (let r = 1; r < map.h - 1; r++) {
+    for (let c = 1; c < map.w - 1; c++) {
+      if (isBuildingTile(map.rows[r][c])) continue;
+      const n = hash(c, r, 51);
+      if (n > 0.2) continue;
+      const road = inBand(av.rows, r) || inBand(av.cols, c);
+      const pick = DECALS.filter((d) => (road ? d.road : d.walk));
+      const d = pick[Math.floor(hash(c, r, 52) * pick.length)];
+      const img = images[d.img];
+      if (!img) continue;
+      const size = d.size * (0.75 + hash(c, r, 53) * 0.5) * t;
+      g.save();
+      g.globalAlpha = d.alpha;
+      g.translate((c + 0.2 + hash(c, r, 54) * 0.6) * t, (r + 0.2 + hash(c, r, 55) * 0.6) * t);
+      g.rotate(d.turn ? hash(c, r, 56) * Math.PI * 2 : 0);
+      g.drawImage(img, -size / 2, -size / 2 * (img.height / img.width), size, size * (img.height / img.width));
+      g.restore();
+    }
+  }
+  // A cold wash over everything ties the ground to the night.
+  g.fillStyle = 'rgba(14, 18, 40, .22)';
+  g.fillRect(0, 0, W, H);
   return cv;
 }
 
@@ -161,20 +216,24 @@ const FACADES = ['texFacade', 'texFacadeStone', 'texFacadeBrick'];
 const STOREY = 2.2;
 
 // One building: roof on top, front below, sized to its lot. `landmark` swaps in a hand-drawn building.
-export function buildBuilding(b, images, t, dpr, landmark) {
+export function buildBuilding(b, images, t, dpr, landmark, maxTall = Infinity) {
   const seed = b.c0 * 31 + b.r0 * 7;
   // Storeys are taller than a person, so doors and windows sit right next to the characters.
   // Small lots get two storeys, larger ones two or three.
   const storeys = b.h <= 1 || b.w <= 2 ? 2 : hash(b.c0, b.r0, 3) < 0.55 ? 3 : 2;
   // A landmark's picture holds its roof and front together; its height follows the picture.
   const art = landmark && images[landmark];
-  const tall = art ? Math.max(3, (art.height / art.width) * b.w - b.h) : storeys * STOREY; // tiles of wall
+  // A painting stands as tall as its picture, but no taller than the lot allows: a little
+  // too tall is pressed down to fit, which a painted front takes without looking stretched.
+  const natural = art ? (art.height / art.width) * b.w : 0;
+  const drawn = art ? Math.min(natural, maxTall) : 0;
+  const tall = art ? Math.max(3, drawn - b.h) : storeys * STOREY; // tiles of wall
   const top = 0.9;                                                              // room for rooftop props
   const W = b.w * t, H = (b.h + tall + top) * t;
   const { cv, g } = offscreen(W, H, dpr);
   if (landmark) {
     const img = images[landmark];
-    const h = W * (img.height / img.width);
+    const h = drawn * t;
     g.drawImage(img, 0, H - h, W, h);
     return { canvas: cv, tall, top, b };
   }

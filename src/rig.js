@@ -13,6 +13,7 @@
 //   mirror  optional: draw the image flipped left-to-right about its pivot
 //   stretch optional (pose) => vertical scale from the pivot, for a limb stepping toward or away
 //   flow    optional (pose, k) => dx: shift for cloth, k runs 0 near the top to 1 at the hem
+//   show    optional (pose) => false hides the part, for things held only some of the time
 
 const sin = Math.sin;
 
@@ -32,27 +33,48 @@ const hemTrail = (p, k) => (sin(p.cycle * 2 - k * 5) * 6 * p.flow - p.drag * 22)
 //   planted          fraction of each cycle a foot spends on the ground
 //   hitch            a stumble in the rhythm
 //   lean, lurch      how far the body tips forward, and rocks with each step
-const MARA_GAIT = { thigh: 82, shin: 72, hip: 151, leg: 186, stride: 62, lift: 40, planted: 0.4, hitch: 0 };
+// How far the hips drop while walking, so a leg can reach the ground at the far ends of a stride
+// with a little knee bend to spare. Without it the planted foot would lift and slide there.
+const crouchFor = (g) => Math.max(0, g.hip - Math.sqrt(((g.thigh + g.shin) * 0.96) ** 2 - g.stride ** 2));
 
-// Zombies step by distance travelled, so their feet stay planted at patrol or chase speed.
-// `dragged` is the leg that scuffs along the ground.
+// Characters step by distance travelled: `perTile` is how far the walk cycle turns per tile, so
+// planted feet keep pace with the ground at any speed.
 function undeadGait(g, unitsPerTile) {
-  return { ...g, perTile: (Math.PI * 2) / (((2 * g.stride) / g.planted) / unitsPerTile) };
+  return { ...g, crouch: crouchFor(g), perTile: (Math.PI * 2) / (((2 * g.stride) / g.planted) / unitsPerTile) };
 }
+// Survivors are drawn 1.75 tiles tall, and their rigs are 338 units tall.
+const humanGait = (g) => undeadGait(g, 338 / 1.75);
+
+// Each survivor's legs, measured from their figure. Mara's are the reference for her running speed.
+export const HUMAN_GAITS = {
+  mara: humanGait({ thigh: 84, shin: 69, hip: 151, leg: 184, stride: 43, lift: 30, planted: 0.4, hitch: 0 }),
+  theo: humanGait({ thigh: 84, shin: 69, hip: 151, leg: 184, stride: 43, lift: 30, planted: 0.4, hitch: 0 }),
+  kate: humanGait({ thigh: 84, shin: 69, hip: 151, leg: 184, stride: 43, lift: 30, planted: 0.4, hitch: 0 }),
+  reyes: humanGait({ thigh: 84, shin: 69, hip: 151, leg: 184, stride: 43, lift: 30, planted: 0.4, hitch: 0 }),
+};
+export const MARA_GAIT = HUMAN_GAITS.mara;
+
+// How fast Mara's legs cycle at a run speed (tiles per second), so a planted foot moves back exactly
+// as fast as the ground passes under her. She's drawn 1.75 tiles tall.
+export const maraCadence = (tilesPerSecond, drawnTiles = 1.75) =>
+  (tilesPerSecond * (338 / drawnTiles) * MARA_GAIT.planted * Math.PI * 2) / (2 * MARA_GAIT.stride);
+
+// `dragged` is the zombie leg that scuffs along the ground.
 // How tall each kind stands next to an ordinary zombie.
 export const DRAW_SCALE = { stalker: 1.2, brute: 1.3 };
 
 export const GAITS = {
-  zombie: undeadGait({ thigh: 84, shin: 74, hip: 155, leg: 190, stride: 58, lift: 28, planted: 0.62, hitch: 0.06, dragged: 0.5, lean: 0.14, lurch: 0.07 }, 398 / 1.75),
-  zgirl: undeadGait({ thigh: 56, shin: 53, hip: 107, leg: 138, stride: 42, lift: 24, planted: 0.6, hitch: 0.09, dragged: 0, lean: 0.05, lurch: -0.1 }, 313 / 1.75),
+  zombie: undeadGait({ thigh: 86, shin: 71, hip: 155, leg: 188, stride: 46, lift: 24, planted: 0.62, hitch: 0.06, dragged: 0.5, lean: 0.14, lurch: 0.07 }, 374 / 1.75),
+  zgirl: undeadGait({ thigh: 58, shin: 50, hip: 106, leg: 130, stride: 32, lift: 19, planted: 0.6, hitch: 0.09, dragged: 0, lean: 0.05, lurch: -0.1 }, 291 / 1.75),
   // The monsters: the stalker lopes with long strides, the brute stomps and rolls.
-  stalker: undeadGait({ thigh: 99, shin: 85, hip: 180, leg: 222, stride: 74, lift: 34, planted: 0.5, hitch: 0.03, dragged: 0, lean: 0.2, lurch: 0.03 }, 461 / (1.75 * 1.2)),
-  screamer: undeadGait({ thigh: 52, shin: 48, hip: 98, leg: 130, stride: 40, lift: 22, planted: 0.6, hitch: 0.08, dragged: 0, lean: 0.06, lurch: -0.08 }, 321 / 1.75),
-  brute: undeadGait({ thigh: 79, shin: 70, hip: 146, leg: 180, stride: 50, lift: 22, planted: 0.65, hitch: 0.04, dragged: 0, lean: 0.12, lurch: 0.12 }, 369 / (1.75 * 1.3)),
+  stalker: undeadGait({ thigh: 103, shin: 83, hip: 182, leg: 222, stride: 74, lift: 34, planted: 0.5, hitch: 0.03, dragged: 0, lean: 0.2, lurch: 0.03 }, 441 / (1.75 * 1.2)),
+  screamer: undeadGait({ thigh: 61, shin: 51, hip: 109, leg: 134, stride: 33, lift: 19, planted: 0.6, hitch: 0.08, dragged: 0, lean: 0.06, lurch: -0.08 }, 297 / 1.75),
+  brute: undeadGait({ thigh: 79, shin: 67, hip: 143, leg: 174, stride: 48, lift: 21, planted: 0.65, hitch: 0.04, dragged: 0, lean: 0.12, lurch: 0.12 }, 352 / (1.75 * 1.3)),
 };
 
-// Returns the thigh's angle, then the shin's and foot's relative to the part above.
-function runLeg(p, shift, g) {
+// Where a foot is in its stride: `x` ahead of the hip (negative is behind), `y` above the ground,
+// and the foot's tilt. `shift` is the leg's offset in the cycle (0 or 0.5).
+function footPath(p, shift, g) {
   const c = p.cycle / (Math.PI * 2);
   const warped = c + g.hitch * sin(c * Math.PI * 2);
   const phi = (((warped + shift) % 1) + 1) % 1;
@@ -69,8 +91,13 @@ function runLeg(p, shift, g) {
     tilt = 0.6 * (1 - k) ** 2 - 0.25 * k ** 3;
   }
   if (drag) tilt = tilt * 0.15 + 0.28; // the toe stays down and scrapes along
-  x *= p.flow; y *= p.flow; tilt *= p.flow;
-  const down = g.hip + p.bob - y;
+  return { x: x * p.flow, y: y * p.flow, tilt: tilt * p.flow };
+}
+
+// Returns the thigh's angle, then the shin's and foot's relative to the part above.
+function runLeg(p, shift, g) {
+  const { x, y, tilt } = footPath(p, shift, g);
+  const down = g.hip - g.crouch * p.flow + p.bob - y;
   const d = Math.min(Math.hypot(x, down), (g.thigh + g.shin) * 0.999);
   const base = Math.atan2(-x, down);
   const hipBend = Math.acos(Math.min(1, (g.thigh ** 2 + d * d - g.shin ** 2) / (2 * g.thigh * d)));
@@ -79,17 +106,29 @@ function runLeg(p, shift, g) {
   return [thigh, shin - thigh, tilt - shin];
 }
 
-// From the front or back a stride reads as the foot rising, not swinging sideways. The planted
-// leg also stretches by the body's bob, so that foot stays on the ground.
-const stepToward = (p, shift, length = 126, rise = 34) =>
-  (length + p.bob - Math.max(0, sin(p.cycle + shift)) * rise * p.flow) / length;
+// From the front or back, the legs are single images that stretch from the hip. A foot follows the
+// same stride as from the side: planted, it stays put on the ground while the body passes over it,
+// so the leg reaches further down the screen (or up it, walking away: `dir` -1); then it lifts and
+// comes forward. The leg also takes up the body's bob and crouch, so the planted foot never slides.
+const stepToward = (p, shift, length, g, dir = 1) => {
+  const f = footPath(p, shift, g);
+  return (length + p.bob - g.crouch * p.flow + dir * f.x * DEPTH - f.y) / length;
+};
+// How much of the stride shows as depth from the front or back. All of it reads as one leg far
+// longer than the other; half keeps the feet nearly planted and the legs believable.
+const DEPTH = 0.5;
+// The figures were painted with their feet shoulder-width apart; the legs turn in to hip width.
+const STANCE = 0.075;
 
-// Seen from the front or back, an arm swings toward and away from the camera, so it shows as the
-// arm getting shorter (most when it swings toward the viewer), not as a sideways rotation.
+// Seen from the front or back, an arm swings toward and away from the camera. That shows as the
+// arm getting a touch shorter, never enough to make the two arms look mismatched.
 const armSwing = (p, shift) => {
   const s = sin(p.cycle + shift) * p.flow;
-  return 1 - Math.max(0, s) * 0.13 - Math.max(0, -s) * 0.05;
+  return 1 - Math.max(0, s) * 0.04;
 };
+
+// A survivor's near arm seen from the side: it swings as she runs and comes up when she's alert.
+const survivorNearArm = (p) => -0.08 - sin(p.cycle - 0.4) * 0.5 * p.flow - p.alert * 0.4;
 
 // Which drawing suits a direction. Near the diagonals it keeps the previous view, so holding
 // a diagonal doesn't make the character flicker between two views.
@@ -102,214 +141,594 @@ export function facingView(fx, fy, previous = 'front') {
 }
 
 export const RIGS = {
+  // ---- Keepers (generated) ----
+  // Pip, cut from one full figure per view. Units are source pixels; the hem's middle is at 0.
   reaper: {
-    height: 390,
+    height: 366,
     parts: {
-      body: { img: 'reaperBody', pivot: [105, 300], at: [0, 0], z: 2, flow: hemRipple,
+      body: { img: 'reaperBody', pivot: [99.6, 327.3], at: [0, 0], z: 2, flow: hemRipple,
         rot: (p) => p.walk * 0.03 + p.slashLean * 0.1,
         off: (p) => [0, p.sink - p.bob] },
-      head: { img: 'reaperHead', parent: 'body', pivot: [30, 86], at: [102, 12], z: 6,
+      head: { img: 'reaperHead', parent: 'body', pivot: [28.1, 43.6], at: [98.6, 5.3], z: 6,
         rot: (p) => sin(p.t * 2.1) * 0.03 + p.walk * 0.03 - p.slashLean * 0.1 + p.hurt * 0.25 },
-      armBack: { img: 'reaperArmBack', parent: 'body', pivot: [24, 12], at: [68, 30], z: 4,
-        rot: (p) => 0.2 - p.walk * 0.2 + p.swing },
-      scythe: { img: 'reaperScythe', parent: 'armBack', pivot: [127, 246], at: [26, 134], z: 3,
-        rot: (p) => -0.2 + scytheTurn(p.swing) },
-      armFront: { img: 'reaperArmFront', parent: 'body', pivot: [22, 12], at: [136, 30], z: 4,
-        rot: (p) => -0.16 + p.walk * 0.2 },
-      lantern: { img: 'reaperLantern', parent: 'armFront', pivot: [11, 5], at: [17, 134], z: 3,
-        rot: (p) => 0.16 + p.lantern },
+      armBack: { img: 'reaperArmBack', parent: 'body', pivot: [24.4, -13.6], at: [28.6, 39.1], z: 4,
+        rot: (p) => 0.093 - p.walk * 0.2 + p.swing },
+      scythe: { img: 'reaperScythe', parent: 'armBack', pivot: [127, 246], at: [28.7, 113.6], z: 3,
+        rot: (p) => -0.093 + scytheTurn(p.swing) },
+      armFront: { img: 'reaperArmFront', parent: 'body', pivot: [20.3, -13.2], at: [168.6, 39.1], z: 4,
+        rot: (p) => -0.096 + p.walk * 0.2 },
+      lantern: { img: 'reaperLantern', parent: 'armFront', pivot: [11, 5], at: [15.8, 113.6], z: 3,
+        rot: (p) => 0.096 + p.lantern },
     },
   },
-  // Faces right; drawRig flips it to face left. The scythe blade points the way Pip faces.
+  // Pip from the side. Faces right; drawRig flips it to face left. The scythe blade points the way they face.
   reaperSide: {
-    height: 390,
+    height: 366,
     parts: {
-      armFar: { img: 'reaperSideArm', parent: 'body', pivot: [21, 12], at: [92, 30], z: 1,
+      armFar: { img: 'reaperSideArm', parent: 'body', pivot: [15.4, 10.6], at: [66.6, 27.3], z: 1,
         rot: (p) => -0.75 + p.walk * 0.15 },
-      lantern: { img: 'reaperLantern', parent: 'armFar', pivot: [11, 5], at: [31, 134], z: 0,
+      lantern: { img: 'reaperLantern', parent: 'armFar', pivot: [11, 5], at: [25.8, 130.5], z: 0,
         rot: (p) => 0.75 + p.lantern },
-      body: { img: 'reaperSideBody', pivot: [83, 300], at: [0, 0], z: 2, flow: hemTrail,
+      body: { img: 'reaperSideBody', pivot: [64.9, 326.2], at: [0, 0], z: 2, flow: hemTrail,
         rot: (p) => p.flow * 0.06 + p.slashLean * 0.16,
         off: (p) => [p.lunge, -p.bob] },
-      head: { img: 'reaperSideHead', parent: 'body', pivot: [47, 86], at: [90, 12], z: 6,
+      head: { img: 'reaperSideHead', parent: 'body', pivot: [24.8, 44.8], at: [52.5, 5.3], z: 6,
         rot: (p) => sin(p.t * 2.1) * 0.02 - p.flow * 0.05 - p.slashLean * 0.12 - p.hurt * 0.25 },
-      armNear: { img: 'reaperSideArm', parent: 'body', pivot: [21, 12], at: [80, 30], z: 5,
+      armNear: { img: 'reaperSideArm', parent: 'body', pivot: [15.4, 10.6], at: [58.6, 27.3], z: 5,
         rot: (p) => -0.2 - p.walk * 0.25 + p.swing },
-      scythe: { img: 'reaperScythe', mirror: true, parent: 'armNear', pivot: [127, 246], at: [31, 134], z: 4,
+      scythe: { img: 'reaperScythe', mirror: true, parent: 'armNear', pivot: [127, 246], at: [25.8, 130.5], z: 4,
         rot: (p) => 0.2 + scytheTurn(p.swing) },
     },
   },
-  // Seen from behind, so the scythe is in the hand on the right of the picture.
+  // Pip from behind, so the scythe is in the hand on the right of the picture.
   reaperBack: {
-    height: 390,
+    height: 366,
     parts: {
-      body: { img: 'reaperBackBody', pivot: [97, 300], at: [0, 0], z: 2, flow: hemRipple,
+      body: { img: 'reaperBackBody', pivot: [97.1, 325.9], at: [0, 0], z: 2, flow: hemRipple,
         rot: (p) => p.walk * 0.03 - p.slashLean * 0.1,
         off: (p) => [0, p.sink - p.bob] },
-      head: { img: 'reaperBackHead', parent: 'body', pivot: [36, 86], at: [95, 12], z: 6,
+      head: { img: 'reaperBackHead', parent: 'body', pivot: [26.9, 45], at: [95.8, 5.3], z: 6,
         rot: (p) => sin(p.t * 2.1) * 0.03 + p.walk * 0.03 + p.slashLean * 0.1 + p.hurt * 0.25 },
-      armL: { img: 'reaperBackArm', parent: 'body', pivot: [22, 12], at: [62, 30], z: 4,
-        rot: (p) => 0.16 + p.walk * 0.2 },
-      lantern: { img: 'reaperLantern', parent: 'armL', pivot: [11, 5], at: [35, 134], z: 3,
-        rot: (p) => -0.16 + p.lantern },
-      armR: { img: 'reaperBackArm', mirror: true, parent: 'body', pivot: [22, 12], at: [130, 30], z: 4,
-        rot: (p) => -0.2 - p.walk * 0.2 - p.swing },
-      scythe: { img: 'reaperScythe', mirror: true, parent: 'armR', pivot: [127, 246], at: [9, 134], z: 3,
-        rot: (p) => 0.2 - scytheTurn(p.swing) },
+      armL: { img: 'reaperBackArmL', parent: 'body', pivot: [29.8, 1.7], at: [31.3, 38.8], z: 4,
+        rot: (p) => 0.058 + p.walk * 0.2 },
+      lantern: { img: 'reaperLantern', parent: 'armL', pivot: [11, 5], at: [29.6, 126.2], z: 3,
+        rot: (p) => -0.058 + p.lantern },
+      armR: { img: 'reaperBackArm', parent: 'body', pivot: [16.4, 2.1], at: [160.2, 38.8], z: 4,
+        rot: (p) => -0.053 - p.walk * 0.2 - p.swing },
+      scythe: { img: 'reaperScythe', mirror: true, parent: 'armR', pivot: [127, 246], at: [17.3, 126.6], z: 3,
+        rot: (p) => 0.053 - scytheTurn(p.swing) },
     },
   },
-  // Realistic proportions: legs are about half her height. Units are source pixels, feet at 0.
-  mara: {
-    height: 350,
+  // The Hollow Monk, cut from one full figure per view. Units are source pixels; the hem's middle is at 0.
+  monk: {
+    height: 366,
     parts: {
-      legL: { img: 'maraLeg', mirror: true, pivot: [24, 10], at: [-12, -186], z: 1,
-        off: (p) => [0, -p.bob], stretch: (p) => stepToward(p, 0, 186, 44) },
-      legR: { img: 'maraLeg', pivot: [24, 10], at: [12, -186], z: 1,
-        off: (p) => [0, -p.bob], stretch: (p) => stepToward(p, Math.PI, 186, 44) },
-      body: { img: 'maraBody', pivot: [36, 102], at: [0, -172], z: 2,
-        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, -p.bob] },
-      armBack: { img: 'maraArmBack', parent: 'body', pivot: [10, 10], at: [13, 13], z: 4,
-        rot: (p) => 0.04 + sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, 0) },
-      armFront: { img: 'maraArmFront', parent: 'body', pivot: [16, 10], at: [60, 13], z: 4,
-        rot: (p) => -0.03 - sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) * (1 - p.alert * 0.22) },
-      head: { img: 'maraHead', parent: 'body', pivot: [28, 73], at: [36, 9], z: 6,
+      body: { img: 'reaperBody', pivot: [89.9, 327.3], at: [0, 0], z: 2, flow: hemRipple,
+        rot: (p) => p.walk * 0.03 + p.slashLean * 0.1,
+        off: (p) => [0, p.sink - p.bob] },
+      head: { img: 'reaperHead', parent: 'body', pivot: [25.9, 43.4], at: [89.5, 5.4], z: 6,
+        rot: (p) => sin(p.t * 2.1) * 0.03 + p.walk * 0.03 - p.slashLean * 0.1 + p.hurt * 0.25 },
+      armBack: { img: 'reaperArmBack', parent: 'body', pivot: [35.7, -1], at: [26, 38.8], z: 4,
+        rot: (p) => 0.035 - p.walk * 0.2 + p.swing },
+      scythe: { img: 'reaperScythe', parent: 'armBack', pivot: [127, 246], at: [32.9, 108.2], z: 3,
+        rot: (p) => -0.035 + scytheTurn(p.swing) },
+      armFront: { img: 'reaperArmFront', parent: 'body', pivot: [16.2, -0.3], at: [152.9, 38.8], z: 4,
+        rot: (p) => -0.044 + p.walk * 0.2 },
+      lantern: { img: 'reaperLantern', parent: 'armFront', pivot: [11, 5], at: [17.9, 108.6], z: 3,
+        rot: (p) => 0.044 + p.lantern },
+    },
+  },
+  // The Hollow Monk from the side. Faces right; drawRig flips it to face left. The scythe blade points the way they face.
+  monkSide: {
+    height: 366,
+    parts: {
+      armFar: { img: 'reaperSideArm', parent: 'body', pivot: [15.8, 10.8], at: [67.3, 49.3], z: 1,
+        rot: (p) => -0.75 + p.walk * 0.15 },
+      lantern: { img: 'reaperLantern', parent: 'armFar', pivot: [11, 5], at: [26.4, 113.3], z: 0,
+        rot: (p) => 0.75 + p.lantern },
+      body: { img: 'reaperSideBody', pivot: [63, 325.2], at: [0, 0], z: 2, flow: hemTrail,
+        rot: (p) => p.flow * 0.06 + p.slashLean * 0.16,
+        off: (p) => [p.lunge, -p.bob] },
+      head: { img: 'reaperSideHead', parent: 'body', pivot: [23.1, 45.8], at: [58.2, 5.4], z: 6,
+        rot: (p) => sin(p.t * 2.1) * 0.02 - p.flow * 0.05 - p.slashLean * 0.12 - p.hurt * 0.25 },
+      armNear: { img: 'reaperSideArm', parent: 'body', pivot: [15.8, 10.8], at: [59.3, 49.3], z: 5,
+        rot: (p) => -0.2 - p.walk * 0.25 + p.swing },
+      scythe: { img: 'reaperScythe', mirror: true, parent: 'armNear', pivot: [127, 246], at: [26.4, 113.3], z: 4,
+        rot: (p) => 0.2 + scytheTurn(p.swing) },
+    },
+  },
+  // The Hollow Monk from behind, so the scythe is in the hand on the right of the picture.
+  monkBack: {
+    height: 366,
+    parts: {
+      body: { img: 'reaperBackBody', pivot: [89.6, 327.4], at: [0, 0], z: 2, flow: hemRipple,
+        rot: (p) => p.walk * 0.03 - p.slashLean * 0.1,
+        off: (p) => [0, p.sink - p.bob] },
+      head: { img: 'reaperBackHead', parent: 'body', pivot: [25.9, 43.6], at: [86.1, 5.4], z: 6,
+        rot: (p) => sin(p.t * 2.1) * 0.03 + p.walk * 0.03 + p.slashLean * 0.1 + p.hurt * 0.25 },
+      armL: { img: 'reaperBackArmL', parent: 'body', pivot: [34.7, -2.2], at: [22.4, 38.7], z: 4,
+        rot: (p) => 0.057 + p.walk * 0.2 },
+      lantern: { img: 'reaperLantern', parent: 'armL', pivot: [11, 5], at: [34.4, 106.3], z: 3,
+        rot: (p) => -0.057 + p.lantern },
+      armR: { img: 'reaperBackArm', parent: 'body', pivot: [15.9, -0.3], at: [149.8, 38.7], z: 4,
+        rot: (p) => -0.033 - p.walk * 0.2 - p.swing },
+      scythe: { img: 'reaperScythe', mirror: true, parent: 'armR', pivot: [127, 246], at: [18.9, 108.2], z: 3,
+        rot: (p) => 0.033 - scytheTurn(p.swing) },
+    },
+  },
+  // The Bone King, cut from one full figure per view. Units are source pixels; the hem's middle is at 0.
+  boneKing: {
+    height: 366,
+    parts: {
+      body: { img: 'reaperBody', pivot: [101.9, 305.8], at: [0, 0], z: 2, flow: hemRipple,
+        rot: (p) => p.walk * 0.03 + p.slashLean * 0.1,
+        off: (p) => [0, p.sink - p.bob] },
+      head: { img: 'reaperHead', parent: 'body', pivot: [30.5, 65.3], at: [103.2, 5.5], z: 6,
+        rot: (p) => sin(p.t * 2.1) * 0.03 + p.walk * 0.03 - p.slashLean * 0.1 + p.hurt * 0.25 },
+      armBack: { img: 'reaperArmBack', parent: 'body', pivot: [13.7, -26.3], at: [16.5, 39.4], z: 4,
+        rot: (p) => -0.017 - p.walk * 0.2 + p.swing },
+      scythe: { img: 'reaperScythe', parent: 'armBack', pivot: [127, 246], at: [6.7, 64.9], z: 3,
+        rot: (p) => 0.017 + scytheTurn(p.swing) },
+      armFront: { img: 'reaperArmFront', parent: 'body', pivot: [22.2, -27.1], at: [190, 39.4], z: 4,
+        rot: (p) => -0.005 + p.walk * 0.2 },
+      lantern: { img: 'reaperLantern', parent: 'armFront', pivot: [11, 5], at: [27.3, 64.5], z: 3,
+        rot: (p) => 0.005 + p.lantern },
+    },
+  },
+  // The Bone King from the side. Faces right; drawRig flips it to face left. The scythe blade points the way they face.
+  boneKingSide: {
+    height: 366,
+    parts: {
+      armFar: { img: 'reaperSideArm', parent: 'body', pivot: [19.4, 10.9], at: [68.8, 41.4], z: 1,
+        rot: (p) => -0.75 + p.walk * 0.15 },
+      lantern: { img: 'reaperLantern', parent: 'armFar', pivot: [11, 5], at: [28.5, 132.2], z: 0,
+        rot: (p) => 0.75 + p.lantern },
+      body: { img: 'reaperSideBody', pivot: [54, 327.7], at: [0, 0], z: 2, flow: hemTrail,
+        rot: (p) => p.flow * 0.06 + p.slashLean * 0.16,
+        off: (p) => [p.lunge, -p.bob] },
+      head: { img: 'reaperSideHead', parent: 'body', pivot: [17.2, 43.4], at: [64.9, 5.5], z: 6,
+        rot: (p) => sin(p.t * 2.1) * 0.02 - p.flow * 0.05 - p.slashLean * 0.12 - p.hurt * 0.25 },
+      armNear: { img: 'reaperSideArm', parent: 'body', pivot: [19.4, 10.9], at: [60.8, 41.4], z: 5,
+        rot: (p) => -0.2 - p.walk * 0.25 + p.swing },
+      scythe: { img: 'reaperScythe', mirror: true, parent: 'armNear', pivot: [127, 246], at: [28.5, 132.2], z: 4,
+        rot: (p) => 0.2 + scytheTurn(p.swing) },
+    },
+  },
+  // The Bone King from behind, so the scythe is in the hand on the right of the picture.
+  boneKingBack: {
+    height: 366,
+    parts: {
+      body: { img: 'reaperBackBody', pivot: [109.7, 308.1], at: [0, 0], z: 2, flow: hemRipple,
+        rot: (p) => p.walk * 0.03 - p.slashLean * 0.1,
+        off: (p) => [0, p.sink - p.bob] },
+      head: { img: 'reaperBackHead', parent: 'body', pivot: [28, 62.9], at: [95.9, 5.4], z: 6,
+        rot: (p) => sin(p.t * 2.1) * 0.03 + p.walk * 0.03 + p.slashLean * 0.1 + p.hurt * 0.25 },
+      armL: { img: 'reaperBackArmL', parent: 'body', pivot: [17.7, -18.8], at: [16.9, 39.2], z: 4,
+        rot: (p) => -0.052 + p.walk * 0.2 },
+      lantern: { img: 'reaperLantern', parent: 'armL', pivot: [11, 5], at: [7.6, 70.7], z: 3,
+        rot: (p) => 0.052 + p.lantern },
+      armR: { img: 'reaperBackArm', parent: 'body', pivot: [18, -18], at: [174.9, 39.2], z: 4,
+        rot: (p) => 0.066 - p.walk * 0.2 - p.swing },
+      scythe: { img: 'reaperScythe', mirror: true, parent: 'armR', pivot: [127, 246], at: [29.4, 71.9], z: 3,
+        rot: (p) => -0.066 - scytheTurn(p.swing) },
+    },
+  },
+  // ---- end keepers ----
+  // ---- Survivor humans (generated) ----
+  // Mara, cut from one full figure per view, so every part matches. Units are source pixels, feet at 0.
+  mara: {
+    height: 338,
+    parts: {
+      legL: { img: 'maraLegL', pivot: [43, 0], at: [-16.9, -187.5], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 187.5, HUMAN_GAITS.mara, 1) },
+      legR: { img: 'maraLeg', pivot: [16.3, 0], at: [16.5, -187.5], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 187.5, HUMAN_GAITS.mara, 1) },
+      body: { img: 'maraBody', pivot: [34.6, 111.1], at: [0, -187.5], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob] },
+      // The left hand (picture right) holds the blade or the gun.
+      armBack: { img: 'maraArmBack', parent: 'body', pivot: [5.7, 7.4], at: [69.6, 29.8], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01 + p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      knife: { img: 'maraKnife', parent: 'armBack', pivot: [6, 6], at: [39.1, 113.3], z: 5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.3 },
+      machete: { img: 'maraMachete', parent: 'armBack', pivot: [6, 6], at: [39.1, 113.3], z: 5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.3 },
+      pistol: { img: 'maraPistol', parent: 'armBack', pivot: [8, 7], at: [39.1, 113.3], z: 5, show: (p) => p.gun > 0, rot: () => -0.14 },
+      // The right hand (picture left) holds the flashlight.
+      armFront: { img: 'maraArmFront', parent: 'body', pivot: [40.8, 7.1], at: [0.7, 29.1], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) * (1 - p.alert * 0.22) },
+      torch: { img: 'maraTorch', parent: 'armFront', pivot: [3.5, 10], at: [5.5, 115.6], z: 5, rot: () => 0.14 },
+      head: { img: 'maraHead', parent: 'body', pivot: [22, 44], at: [34.4, 5], z: 6,
         rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
     },
   },
-  // Faces right; drawRig flips it to face left.
+  // Mara from the side. Faces right; drawRig flips it to face left.
   maraSide: {
-    height: 350,
+    height: 338,
     parts: {
-      farThigh: { img: 'maraSideThighFar', pivot: [24, 10], at: [6, -186], z: 0,
-        off: (p) => [0, -p.bob], rot: (p) => runLeg(p, 0.5, MARA_GAIT)[0] },
-      farFoot: { img: 'maraSideFootFar', parent: 'farShin', pivot: [17, 7], at: [17, 79], z: 0,
-        rot: (p) => runLeg(p, 0.5, MARA_GAIT)[2] },
-      farShin: { img: 'maraSideShinFar', parent: 'farThigh', pivot: [23, 7], at: [23, 92], z: 0,
-        rot: (p) => runLeg(p, 0.5, MARA_GAIT)[1] },
-      armFar: { img: 'maraSideArm', parent: 'body', pivot: [14, 10], at: [52, 16], z: 1,
-        rot: (p) => -0.08 + sin(p.cycle - 0.4) * 0.5 * p.flow },
-      thigh: { img: 'maraSideThigh', pivot: [24, 10], at: [-2, -186], z: 2,
-        off: (p) => [0, -p.bob], rot: (p) => runLeg(p, 0, MARA_GAIT)[0] },
-      foot: { img: 'maraSideFoot', parent: 'shin', pivot: [17, 7], at: [17, 79], z: 2,
-        rot: (p) => runLeg(p, 0, MARA_GAIT)[2] },
-      shin: { img: 'maraSideShin', parent: 'thigh', pivot: [23, 7], at: [23, 92], z: 2,
-        rot: (p) => runLeg(p, 0, MARA_GAIT)[1] },
-      body: { img: 'maraSideBody', pivot: [52, 111], at: [0, -172], z: 3,
-        rot: (p) => p.flow * 0.08 + sin(p.t * 1.8) * 0.01, off: (p) => [0, -p.bob] },
-      head: { img: 'maraSideHead', parent: 'body', pivot: [28, 68], at: [54, 9], z: 6,
+      farThigh: { img: 'maraSideThighFar', pivot: [23.2, 4], at: [6, -183.6], z: 0,
+        off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.mara)[0] },
+      farShin: { img: 'maraSideShinFar', parent: 'farThigh', pivot: [18, 7], at: [18, 88], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.mara)[1] },
+      farFoot: { img: 'maraSideFootFar', parent: 'farShin', pivot: [20, 7], at: [20, 76], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.mara)[2] },
+      armFar: { img: 'maraSideArm', parent: 'body', pivot: [12.8, 9.9], at: [49.8, 21.3], z: 1,
+        rot: (p) => (-0.08 + sin(p.cycle - 0.4) * 0.5 * p.flow) * (1 - Math.max(p.stab, p.gun)) - p.stab * 1.35 - p.gun * 1.5 },
+      knife: { img: 'maraKnife', parent: 'armFar', pivot: [6, 6], at: [19.9, 123.1], z: 1.5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.12 },
+      machete: { img: 'maraMachete', parent: 'armFar', pivot: [6, 6], at: [19.9, 123.1], z: 1.5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.12 },
+      pistol: { img: 'maraPistol', parent: 'armFar', pivot: [8, 7], at: [19.9, 123.1], z: 1.5, show: (p) => p.gun > 0 },
+      thigh: { img: 'maraSideThigh', pivot: [23.2, 4], at: [-2, -183.6], z: 2,
+        off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0, HUMAN_GAITS.mara)[0] },
+      shin: { img: 'maraSideShin', parent: 'thigh', pivot: [18, 7], at: [18, 88], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.mara)[1] },
+      foot: { img: 'maraSideFoot', parent: 'shin', pivot: [20, 7], at: [20, 76], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.mara)[2] },
+      body: { img: 'maraSideBody', pivot: [48.8, 103.9], at: [0, -187.6], z: 3,
+        rot: (p) => p.flow * 0.08 + sin(p.t * 1.8) * 0.01, off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob] },
+      head: { img: 'maraSideHead', parent: 'body', pivot: [20, 51.4], at: [44.5, 5], z: 6,
         rot: (p) => sin(p.t * 2) * 0.015 - p.flow * 0.05 - sin(p.cycle * 2) * 0.015 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
-      armNear: { img: 'maraSideArmFront', parent: 'body', pivot: [14, 10], at: [48, 16], z: 5,
-        rot: (p) => -0.08 - sin(p.cycle - 0.4) * 0.5 * p.flow - p.alert * 0.4 },
+      armNear: { img: 'maraSideArmFront', parent: 'body', pivot: [12.8, 9.9], at: [45.8, 21.3], z: 5, rot: survivorNearArm },
+      // The flashlight stays pointed ahead and a little down, whatever the arm is doing.
+      torch: { img: 'maraTorchSide', parent: 'armNear', pivot: [9, 4], at: [19.9, 123.1], z: 5.5,
+        rot: (p) => 0.22 - p.flow * 0.08 - survivorNearArm(p) },
     },
   },
-  // Seen from behind, with her backpack in the middle of her back.
+  // Mara from behind. The left hand (picture left) holds the weapon.
   maraBack: {
-    height: 350,
+    height: 338,
     parts: {
-      legL: { img: 'maraBackLeg', mirror: true, pivot: [26, 10], at: [-12, -186], z: 1,
-        off: (p) => [0, -p.bob], stretch: (p) => stepToward(p, 0, 186, 44) },
-      legR: { img: 'maraBackLeg', pivot: [26, 10], at: [12, -186], z: 1,
-        off: (p) => [0, -p.bob], stretch: (p) => stepToward(p, Math.PI, 186, 44) },
-      armL: { img: 'maraBackArm', parent: 'body', pivot: [11, 10], at: [20, 13], z: 4,
-        rot: (p) => 0.04 + sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) },
-      armR: { img: 'maraBackArm', mirror: true, parent: 'body', pivot: [11, 10], at: [62, 13], z: 4,
-        rot: (p) => -0.04 - sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, 0) },
-      body: { img: 'maraBackBody', pivot: [40, 106], at: [0, -172], z: 2,
-        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, -p.bob] },
-      head: { img: 'maraBackHead', parent: 'body', pivot: [28, 67], at: [40, 9], z: 6,
+      legL: { img: 'maraBackLegL', pivot: [38.3, 0], at: [-17.1, -185.9], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 185.9, HUMAN_GAITS.mara, -1) },
+      legR: { img: 'maraBackLeg', pivot: [16.6, 0], at: [16.7, -185.9], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 185.9, HUMAN_GAITS.mara, -1) },
+      armL: { img: 'maraBackArmL', parent: 'body', pivot: [40.9, 7.9], at: [0.6, 29.3], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01 - p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      armR: { img: 'maraBackArm', parent: 'body', pivot: [5.2, 7.1], at: [70.8, 30.2], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) },
+      knife: { img: 'maraKnife', parent: 'armL', pivot: [6, 6], at: [5.8, 114.3], z: 4.5, show: (p) => !p.gun && p.blade < 3, rot: () => 0.3 },
+      machete: { img: 'maraMachete', parent: 'armL', pivot: [6, 6], at: [5.8, 114.3], z: 4.5, show: (p) => !p.gun && p.blade >= 3, rot: () => 0.3 },
+      pistol: { img: 'maraPistol', parent: 'armL', pivot: [8, 7], at: [5.8, 114.3], z: 4.5, show: (p) => p.gun > 0, rot: () => 0.14 },
+      body: { img: 'maraBackBody', pivot: [35.1, 112.5], at: [0, -185.9], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.mara.crouch * p.flow - p.bob] },
+      head: { img: 'maraBackHead', parent: 'body', pivot: [22.4, 44.5], at: [34.5, 5], z: 6,
         rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow },
     },
   },
-  ...undeadViews('zombie', GAITS.zombie, {
-    height: 398, armY: 17,
-    front: { hip: [53, 146], neck: [30, 86], neckAt: [49, 8], arm: [17, 10], armX: [17, 80], hipX: 12, leg: [23, 10] },
-    side: { hip: [42, 161], neck: [28, 86], neckAt: [37, 8], arm: [20, 10], armX: [29, 35], leg: [20, 10], kneeAt: [23, 94], knee: [23, 7], ankleAt: [19, 81], ankle: [19, 7], legX: [-4, 5], legY: -190 },
-    back: { hip: [55, 133], neck: [32, 86], neckAt: [52, 8], arm: [14, 10], armX: [32, 69], hipX: 13, leg: [24, 10] },
-    bodyY: -166, sideBodyY: -166, legY: -190,
+  // Theo, cut from one full figure per view, so every part matches. Units are source pixels, feet at 0.
+  theo: {
+    height: 338,
+    parts: {
+      legL: { img: 'maraLegL', pivot: [48.8, 0], at: [-16.7, -172.9], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 172.9, HUMAN_GAITS.theo, 1) },
+      legR: { img: 'maraLeg', pivot: [22.6, 0], at: [22.4, -172.9], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 172.9, HUMAN_GAITS.theo, 1) },
+      body: { img: 'maraBody', pivot: [69.8, 129.2], at: [0, -172.9], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob] },
+      // The left hand (picture right) holds the blade or the gun.
+      armBack: { img: 'maraArmBack', parent: 'body', pivot: [7.8, 4.1], at: [109.4, 30.3], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01 + p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      knife: { img: 'maraKnife', parent: 'armBack', pivot: [6, 6], at: [39.3, 115.5], z: 5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.3 },
+      machete: { img: 'maraMachete', parent: 'armBack', pivot: [6, 6], at: [39.3, 115.5], z: 5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.3 },
+      pistol: { img: 'maraPistol', parent: 'armBack', pivot: [8, 7], at: [39.3, 115.5], z: 5, show: (p) => p.gun > 0, rot: () => -0.14 },
+      // The right hand (picture left) holds the flashlight.
+      armFront: { img: 'maraArmFront', parent: 'body', pivot: [39.9, 3.9], at: [32.7, 30.5], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) * (1 - p.alert * 0.22) },
+      torch: { img: 'maraTorch', parent: 'armFront', pivot: [3.5, 10], at: [5.9, 117.5], z: 5, rot: () => 0.14 },
+      head: { img: 'maraHead', parent: 'body', pivot: [16.9, 40.9], at: [71, 5], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
+    },
+  },
+  // Theo from the side. Faces right; drawRig flips it to face left.
+  theoSide: {
+    height: 338,
+    parts: {
+      farThigh: { img: 'maraSideThighFar', pivot: [30.9, 4], at: [6, -183.7], z: 0,
+        off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.theo)[0] },
+      farShin: { img: 'maraSideShinFar', parent: 'farThigh', pivot: [32, 7], at: [32, 88], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.theo)[1] },
+      farFoot: { img: 'maraSideFootFar', parent: 'farShin', pivot: [28, 7], at: [28, 76], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.theo)[2] },
+      armFar: { img: 'maraSideArm', parent: 'body', pivot: [14.9, 10], at: [31.4, 25.5], z: 1,
+        rot: (p) => (-0.08 + sin(p.cycle - 0.4) * 0.5 * p.flow) * (1 - Math.max(p.stab, p.gun)) - p.stab * 1.35 - p.gun * 1.5 },
+      knife: { img: 'maraKnife', parent: 'armFar', pivot: [6, 6], at: [26.9, 126.7], z: 1.5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.12 },
+      machete: { img: 'maraMachete', parent: 'armFar', pivot: [6, 6], at: [26.9, 126.7], z: 1.5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.12 },
+      pistol: { img: 'maraPistol', parent: 'armFar', pivot: [8, 7], at: [26.9, 126.7], z: 1.5, show: (p) => p.gun > 0 },
+      thigh: { img: 'maraSideThigh', pivot: [30.9, 4], at: [-2, -183.7], z: 2,
+        off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0, HUMAN_GAITS.theo)[0] },
+      shin: { img: 'maraSideShin', parent: 'thigh', pivot: [32, 7], at: [32, 88], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.theo)[1] },
+      foot: { img: 'maraSideFoot', parent: 'shin', pivot: [28, 7], at: [28, 76], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.theo)[2] },
+      body: { img: 'maraSideBody', pivot: [29.8, 108.4], at: [0, -187.7], z: 3,
+        rot: (p) => p.flow * 0.08 + sin(p.t * 1.8) * 0.01, off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob] },
+      head: { img: 'maraSideHead', parent: 'body', pivot: [17.6, 47], at: [29.8, 5], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.015 - p.flow * 0.05 - sin(p.cycle * 2) * 0.015 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
+      armNear: { img: 'maraSideArmFront', parent: 'body', pivot: [14.9, 10], at: [27.4, 25.5], z: 5, rot: survivorNearArm },
+      // The flashlight stays pointed ahead and a little down, whatever the arm is doing.
+      torch: { img: 'maraTorchSide', parent: 'armNear', pivot: [9, 4], at: [26.9, 126.7], z: 5.5,
+        rot: (p) => 0.22 - p.flow * 0.08 - survivorNearArm(p) },
+    },
+  },
+  // Theo from behind. The left hand (picture left) holds the weapon.
+  theoBack: {
+    height: 338,
+    parts: {
+      legL: { img: 'maraBackLegL', pivot: [48.5, 0], at: [-16.2, -171.9], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 171.9, HUMAN_GAITS.theo, -1) },
+      legR: { img: 'maraBackLeg', pivot: [22.8, 0], at: [22.8, -171.9], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 171.9, HUMAN_GAITS.theo, -1) },
+      armL: { img: 'maraBackArmL', parent: 'body', pivot: [37.8, 4.4], at: [30.3, 29.9], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01 - p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      armR: { img: 'maraBackArm', parent: 'body', pivot: [7.8, 4], at: [107.8, 29.9], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) },
+      knife: { img: 'maraKnife', parent: 'armL', pivot: [6, 6], at: [6.4, 115.4], z: 4.5, show: (p) => !p.gun && p.blade < 3, rot: () => 0.3 },
+      machete: { img: 'maraMachete', parent: 'armL', pivot: [6, 6], at: [6.4, 115.4], z: 4.5, show: (p) => !p.gun && p.blade >= 3, rot: () => 0.3 },
+      pistol: { img: 'maraPistol', parent: 'armL', pivot: [8, 7], at: [6.4, 115.4], z: 4.5, show: (p) => p.gun > 0, rot: () => 0.14 },
+      body: { img: 'maraBackBody', pivot: [68.7, 129.1], at: [0, -171.9], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.theo.crouch * p.flow - p.bob] },
+      head: { img: 'maraBackHead', parent: 'body', pivot: [17.3, 42.1], at: [69.8, 5], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow },
+    },
+  },
+  // Kate, cut from one full figure per view, so every part matches. Units are source pixels, feet at 0.
+  kate: {
+    height: 338,
+    parts: {
+      legL: { img: 'maraLegL', pivot: [47.5, 0], at: [-22, -183.9], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 183.9, HUMAN_GAITS.kate, 1) },
+      legR: { img: 'maraLeg', pivot: [21.3, 0], at: [21.4, -183.9], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 183.9, HUMAN_GAITS.kate, 1) },
+      body: { img: 'maraBody', pivot: [73.7, 121.3], at: [0, -183.9], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob] },
+      // The left hand (picture right) holds the blade or the gun.
+      armBack: { img: 'maraArmBack', parent: 'body', pivot: [7.3, 3.4], at: [111.4, 30.2], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01 + p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      knife: { img: 'maraKnife', parent: 'armBack', pivot: [6, 6], at: [40.6, 108.7], z: 5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.3 },
+      machete: { img: 'maraMachete', parent: 'armBack', pivot: [6, 6], at: [40.6, 108.7], z: 5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.3 },
+      pistol: { img: 'maraPistol', parent: 'armBack', pivot: [8, 7], at: [40.6, 108.7], z: 5, show: (p) => p.gun > 0, rot: () => -0.14 },
+      // The right hand (picture left) holds the flashlight.
+      armFront: { img: 'maraArmFront', parent: 'body', pivot: [40.2, 3.7], at: [37, 30.4], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) * (1 - p.alert * 0.22) },
+      torch: { img: 'maraTorch', parent: 'armFront', pivot: [3.5, 10], at: [5.6, 111], z: 5, rot: () => 0.14 },
+      head: { img: 'maraHead', parent: 'body', pivot: [21.8, 37.6], at: [75.3, 4.9], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
+    },
+  },
+  // Kate from the side. Faces right; drawRig flips it to face left.
+  kateSide: {
+    height: 338,
+    parts: {
+      farThigh: { img: 'maraSideThighFar', pivot: [26.8, 4], at: [6, -183.7], z: 0,
+        off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.kate)[0] },
+      farShin: { img: 'maraSideShinFar', parent: 'farThigh', pivot: [22, 7], at: [22, 88], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.kate)[1] },
+      farFoot: { img: 'maraSideFootFar', parent: 'farShin', pivot: [22, 7], at: [22, 76], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.kate)[2] },
+      armFar: { img: 'maraSideArm', parent: 'body', pivot: [13.9, 9.9], at: [21.1, 22.2], z: 1,
+        rot: (p) => (-0.08 + sin(p.cycle - 0.4) * 0.5 * p.flow) * (1 - Math.max(p.stab, p.gun)) - p.stab * 1.35 - p.gun * 1.5 },
+      knife: { img: 'maraKnife', parent: 'armFar', pivot: [6, 6], at: [26.9, 123.2], z: 1.5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.12 },
+      machete: { img: 'maraMachete', parent: 'armFar', pivot: [6, 6], at: [26.9, 123.2], z: 1.5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.12 },
+      pistol: { img: 'maraPistol', parent: 'armFar', pivot: [8, 7], at: [26.9, 123.2], z: 1.5, show: (p) => p.gun > 0 },
+      thigh: { img: 'maraSideThigh', pivot: [26.8, 4], at: [-2, -183.7], z: 2,
+        off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0, HUMAN_GAITS.kate)[0] },
+      shin: { img: 'maraSideShin', parent: 'thigh', pivot: [22, 7], at: [22, 88], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.kate)[1] },
+      foot: { img: 'maraSideFoot', parent: 'shin', pivot: [22, 7], at: [22, 76], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.kate)[2] },
+      body: { img: 'maraSideBody', pivot: [26.4, 105.6], at: [0, -187.7], z: 3,
+        rot: (p) => p.flow * 0.08 + sin(p.t * 1.8) * 0.01, off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob] },
+      head: { img: 'maraSideHead', parent: 'body', pivot: [17.8, 49.6], at: [22.4, 4.9], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.015 - p.flow * 0.05 - sin(p.cycle * 2) * 0.015 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
+      armNear: { img: 'maraSideArmFront', parent: 'body', pivot: [13.9, 9.9], at: [17.1, 22.2], z: 5, rot: survivorNearArm },
+      // The flashlight stays pointed ahead and a little down, whatever the arm is doing.
+      torch: { img: 'maraTorchSide', parent: 'armNear', pivot: [9, 4], at: [26.9, 123.2], z: 5.5,
+        rot: (p) => 0.22 - p.flow * 0.08 - survivorNearArm(p) },
+    },
+  },
+  // Kate from behind. The left hand (picture left) holds the weapon.
+  kateBack: {
+    height: 338,
+    parts: {
+      legL: { img: 'maraBackLegL', pivot: [36.7, 0], at: [-20.9, -183.8], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 183.8, HUMAN_GAITS.kate, -1) },
+      legR: { img: 'maraBackLeg', pivot: [20.5, 0], at: [20.4, -183.8], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 183.8, HUMAN_GAITS.kate, -1) },
+      armL: { img: 'maraBackArmL', parent: 'body', pivot: [41.8, 7.1], at: [5.1, 29], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01 - p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      armR: { img: 'maraBackArm', parent: 'body', pivot: [9.4, 6.7], at: [77.8, 29], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) },
+      knife: { img: 'maraKnife', parent: 'armL', pivot: [6, 6], at: [7.7, 117.1], z: 4.5, show: (p) => !p.gun && p.blade < 3, rot: () => 0.3 },
+      machete: { img: 'maraMachete', parent: 'armL', pivot: [6, 6], at: [7.7, 117.1], z: 4.5, show: (p) => !p.gun && p.blade >= 3, rot: () => 0.3 },
+      pistol: { img: 'maraPistol', parent: 'armL', pivot: [8, 7], at: [7.7, 117.1], z: 4.5, show: (p) => p.gun > 0, rot: () => 0.14 },
+      body: { img: 'maraBackBody', pivot: [42.1, 117.1], at: [0, -183.8], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.kate.crouch * p.flow - p.bob] },
+      head: { img: 'maraBackHead', parent: 'body', pivot: [19.4, 42], at: [41.3, 4.9], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow },
+    },
+  },
+  // Reyes, cut from one full figure per view, so every part matches. Units are source pixels, feet at 0.
+  reyes: {
+    height: 338,
+    parts: {
+      legL: { img: 'maraLegL', pivot: [48, 0], at: [-21.7, -174.7], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 174.7, HUMAN_GAITS.reyes, 1) },
+      legR: { img: 'maraLeg', pivot: [22.8, 0], at: [22.8, -174.7], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 174.7, HUMAN_GAITS.reyes, 1) },
+      body: { img: 'maraBody', pivot: [70.8, 132.9], at: [0, -174.7], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob] },
+      // The left hand (picture right) holds the blade or the gun.
+      armBack: { img: 'maraArmBack', parent: 'body', pivot: [8.7, 2.3], at: [114.7, 29.6], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01 + p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      knife: { img: 'maraKnife', parent: 'armBack', pivot: [6, 6], at: [36.3, 114.8], z: 5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.3 },
+      machete: { img: 'maraMachete', parent: 'armBack', pivot: [6, 6], at: [36.3, 114.8], z: 5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.3 },
+      pistol: { img: 'maraPistol', parent: 'armBack', pivot: [8, 7], at: [36.3, 114.8], z: 5, show: (p) => p.gun > 0, rot: () => -0.14 },
+      // The right hand (picture left) holds the flashlight.
+      armFront: { img: 'maraArmFront', parent: 'body', pivot: [35.6, 2.7], at: [28.2, 29.9], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) * (1 - p.alert * 0.22) },
+      torch: { img: 'maraTorch', parent: 'armFront', pivot: [3.5, 10], at: [5.8, 118.2], z: 5, rot: () => 0.14 },
+      head: { img: 'maraHead', parent: 'body', pivot: [17, 35.4], at: [71.2, 5], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
+    },
+  },
+  // Reyes from the side. Faces right; drawRig flips it to face left.
+  reyesSide: {
+    height: 338,
+    parts: {
+      farThigh: { img: 'maraSideThighFar', pivot: [27.7, 4], at: [6, -183.8], z: 0,
+        off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.reyes)[0] },
+      farShin: { img: 'maraSideShinFar', parent: 'farThigh', pivot: [26, 7], at: [26, 88], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.reyes)[1] },
+      farFoot: { img: 'maraSideFootFar', parent: 'farShin', pivot: [22, 7], at: [22, 76], z: 0,
+        rot: (p) => runLeg(p, 0.5, HUMAN_GAITS.reyes)[2] },
+      armFar: { img: 'maraSideArm', parent: 'body', pivot: [18.8, 9.9], at: [34.9, 25.9], z: 1,
+        rot: (p) => (-0.08 + sin(p.cycle - 0.4) * 0.5 * p.flow) * (1 - Math.max(p.stab, p.gun)) - p.stab * 1.35 - p.gun * 1.5 },
+      knife: { img: 'maraKnife', parent: 'armFar', pivot: [6, 6], at: [36.6, 121.4], z: 1.5, show: (p) => !p.gun && p.blade < 3, rot: () => -0.12 },
+      machete: { img: 'maraMachete', parent: 'armFar', pivot: [6, 6], at: [36.6, 121.4], z: 1.5, show: (p) => !p.gun && p.blade >= 3, rot: () => -0.12 },
+      pistol: { img: 'maraPistol', parent: 'armFar', pivot: [8, 7], at: [36.6, 121.4], z: 1.5, show: (p) => p.gun > 0 },
+      thigh: { img: 'maraSideThigh', pivot: [27.7, 4], at: [-2, -183.8], z: 2,
+        off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0, HUMAN_GAITS.reyes)[0] },
+      shin: { img: 'maraSideShin', parent: 'thigh', pivot: [26, 7], at: [26, 88], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.reyes)[1] },
+      foot: { img: 'maraSideFoot', parent: 'shin', pivot: [22, 7], at: [22, 76], z: 2,
+        rot: (p) => runLeg(p, 0, HUMAN_GAITS.reyes)[2] },
+      body: { img: 'maraSideBody', pivot: [38.3, 111.1], at: [0, -187.8], z: 3,
+        rot: (p) => p.flow * 0.08 + sin(p.t * 1.8) * 0.01, off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob] },
+      head: { img: 'maraSideHead', parent: 'body', pivot: [15.1, 44], at: [36, 5], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.015 - p.flow * 0.05 - sin(p.cycle * 2) * 0.015 * p.flow + p.alert * Math.sin(p.t * 18) * 0.04 },
+      armNear: { img: 'maraSideArmFront', parent: 'body', pivot: [18.8, 9.9], at: [30.9, 25.9], z: 5, rot: survivorNearArm },
+      // The flashlight stays pointed ahead and a little down, whatever the arm is doing.
+      torch: { img: 'maraTorchSide', parent: 'armNear', pivot: [9, 4], at: [36.6, 121.4], z: 5.5,
+        rot: (p) => 0.22 - p.flow * 0.08 - survivorNearArm(p) },
+    },
+  },
+  // Reyes from behind. The left hand (picture left) holds the weapon.
+  reyesBack: {
+    height: 338,
+    parts: {
+      legL: { img: 'maraBackLegL', pivot: [47.5, 0], at: [-24, -173.8], z: 1, rot: () => -STANCE,
+        off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, 173.8, HUMAN_GAITS.reyes, -1) },
+      legR: { img: 'maraBackLeg', pivot: [22, 0], at: [22.3, -173.8], z: 1, rot: () => STANCE,
+        off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, 173.8, HUMAN_GAITS.reyes, -1) },
+      armL: { img: 'maraBackArmL', parent: 'body', pivot: [33.3, 3.3], at: [27.9, 29.2], z: 1.5,
+        rot: (p) => -0.14 + sin(p.t * 1.7) * 0.01 - p.stab * 0.15,
+        stretch: (p) => armSwing(p, 0) * (1 - p.stab * 0.3 - p.gun * 0.35) },
+      armR: { img: 'maraBackArm', parent: 'body', pivot: [9, 2.9], at: [115.9, 29.2], z: 1.5,
+        rot: (p) => 0.14 - sin(p.t * 1.7) * 0.01, stretch: (p) => armSwing(p, Math.PI) },
+      knife: { img: 'maraKnife', parent: 'armL', pivot: [6, 6], at: [5.2, 115.5], z: 4.5, show: (p) => !p.gun && p.blade < 3, rot: () => 0.3 },
+      machete: { img: 'maraMachete', parent: 'armL', pivot: [6, 6], at: [5.2, 115.5], z: 4.5, show: (p) => !p.gun && p.blade >= 3, rot: () => 0.3 },
+      pistol: { img: 'maraPistol', parent: 'armL', pivot: [8, 7], at: [5.2, 115.5], z: 4.5, show: (p) => p.gun > 0, rot: () => 0.14 },
+      body: { img: 'maraBackBody', pivot: [71.9, 132.6], at: [0, -173.8], z: 2,
+        rot: (p) => sin(p.cycle) * 0.03 * p.flow + sin(p.t * 1.8) * 0.015, off: (p) => [0, HUMAN_GAITS.reyes.crouch * p.flow - p.bob] },
+      head: { img: 'maraBackHead', parent: 'body', pivot: [17.1, 36.6], at: [72.1, 5], z: 6,
+        rot: (p) => sin(p.t * 2) * 0.02 + sin(p.cycle) * 0.02 * p.flow },
+    },
+  },
+  // ---- end survivor humans ----
+  ...figureUndead('zombie', GAITS.zombie, {
+    height: 374,
+    front: { legL: { pivot: [43.5, 0], at: [-31.8, -191.5] }, legR: { pivot: [20.9, 0], at: [21.1, -191.5] }, body: { pivot: [73.7, 142.2], at: [0, -191.5] },
+      armL: { pivot: [19.8, 5.8], at: [30.8, 33.8] }, armR: { pivot: [8.5, 5.6], at: [117.1, 33.2] }, head: { pivot: [21.7, 45.8], at: [74.6, 5.5] }, legLen: 191.5 },
+    back: { legL: { pivot: [45, 0], at: [-32.1, -191.5] }, legR: { pivot: [19.8, 0], at: [20.2, -191.5] }, body: { pivot: [75, 142.2], at: [0, -191.5] },
+      armL: { pivot: [19.2, 1.9], at: [25.1, 37] }, armR: { pivot: [6.8, 5.5], at: [118.5, 34.3] }, head: { pivot: [21.3, 45.8], at: [75, 5.5] }, legLen: 191.5 },
+    side: { body: { pivot: [33.2, 132], at: [0, -191.9] }, head: { pivot: [17.7, 55.6], at: [25.2, 5.5] }, arm: { pivot: [-5.7, 17.7], at: [44.7, 30.7] },
+      thigh: { pivot: [29.7, 4], at: [0, -187.9] }, shin: { pivot: [21, 7], at: [21, 90] }, foot: { pivot: [24, 7], at: [24, 78] } },
   }),
-  ...undeadViews('zgirl', GAITS.zgirl, {
-    height: 313, armY: 17,
-    front: { hip: [42, 147], neck: [33, 74], neckAt: [44, 8], arm: [12, 10], armX: [28, 61], hipX: 11, leg: [20, 10] },
-    side: { hip: [48, 153], neck: [33, 74], neckAt: [37, 8], arm: [11, 10], armX: [31, 37], leg: [24, 10], kneeAt: [18, 66], knee: [18, 7], ankleAt: [19, 60], ankle: [19, 7], legX: [-4, 5], legY: -138 },
-    back: { hip: [49, 149], neck: [29, 74], neckAt: [39, 8], arm: [10, 10], armX: [27, 53], hipX: 9, leg: [17, 10] },
-    bodyY: -94, sideBodyY: -94, legY: -138,
+  ...figureUndead('zgirl', GAITS.zgirl, {
+    height: 291,
+    front: { legL: { pivot: [33.1, 0], at: [-25.8, -137.2] }, legR: { pivot: [25.6, 0], at: [25.9, -137.2] }, body: { pivot: [58.9, 107.6], at: [0, -137.2] },
+      armL: { pivot: [8.4, 14.5], at: [30.2, 24.2] }, armR: { pivot: [4.5, 12.7], at: [93.1, 26] }, head: { pivot: [26.6, 50.5], at: [59.5, 4.2] }, legLen: 137.2 },
+    back: { legL: { pivot: [34, 0], at: [-25.5, -130.1] }, legR: { pivot: [25.6, 0], at: [25.4, -130.1] }, body: { pivot: [60.2, 118.8], at: [0, -130.1] },
+      armL: { pivot: [2.5, 2.6], at: [23.8, 27.6] }, armR: { pivot: [3.8, 11.1], at: [90.6, 26.6] }, head: { pivot: [23.5, 46.3], at: [59.4, 4.3] }, legLen: 130.1 },
+    side: { body: { pivot: [29.7, 114.6], at: [0, -133.8] }, head: { pivot: [18.1, 46.8], at: [19.3, 4.3] }, arm: { pivot: [-1.8, 5.5], at: [50.5, 15.8] },
+      thigh: { pivot: [30.9, 4], at: [0, -129.8] }, shin: { pivot: [27, 7], at: [27, 62] }, foot: { pivot: [28, 7], at: [28, 57] } },
   }),
-  ...undeadViews('stalker', GAITS.stalker, {
-    height: 461, armY: 22,
-    front: { hip: [51, 177], neck: [20, 89], neckAt: [46, 8], arm: [12, 10], armX: [12, 78], hipX: 11, leg: [22, 10] },
-    side: { hip: [52, 193], neck: [24, 89], neckAt: [44, 8], arm: [13, 10], armX: [33, 39], leg: [22, 10], kneeAt: [20, 109], knee: [20, 7], ankleAt: [17, 92], ankle: [17, 7], legX: [-4, 5], legY: -222 },
-    back: { hip: [56, 221], neck: [18, 89], neckAt: [46, 8], arm: [14, 10], armX: [10, 81], hipX: 11, leg: [22, 10] },
-    bodyY: -194, sideBodyY: -194, legY: -222,
+  ...figureUndead('stalker', GAITS.stalker, {
+    height: 441,
+    front: { legL: { pivot: [53.2, 0], at: [-22.7, -228.8] }, legR: { pivot: [19.4, 0], at: [17.4, -228.8] }, body: { pivot: [46.6, 174.8], at: [0, -228.8] },
+      armL: { pivot: [53.1, 6.9], at: [1.8, 40.7] }, armR: { pivot: [8.6, 6.8], at: [82, 41] }, head: { pivot: [23.9, 43.7], at: [41.9, 6.3] }, legLen: 228.8 },
+    back: { legL: { pivot: [37.3, 0], at: [-16.5, -221.9] }, legR: { pivot: [24.7, 0], at: [24.9, -221.9] }, body: { pivot: [36.9, 181.6], at: [0, -221.9] },
+      armL: { pivot: [50, 6.8], at: [4.7, 40.6] }, armR: { pivot: [6.9, 5.5], at: [86.5, 40.8] }, head: { pivot: [23.3, 43.9], at: [44.8, 6.4] }, legLen: 221.9 },
+    side: { body: { pivot: [39.1, 173.9], at: [0, -225.7] }, head: { pivot: [19.8, 47.2], at: [24.8, 6.4] }, arm: { pivot: [-3.5, 10.2], at: [52.3, 38.8] },
+      thigh: { pivot: [29.1, 4], at: [0, -221.7] }, shin: { pivot: [16, 7], at: [16, 106] }, foot: { pivot: [18, 7], at: [18, 90] } },
   }),
-  ...undeadViews('screamer', GAITS.screamer, {
-    height: 321, armY: 17,
-    front: { hip: [35, 155], neck: [29, 80], neckAt: [36, 8], arm: [14, 10], armX: [19, 51], hipX: 9, leg: [18, 10] },
-    side: { hip: [38, 165], neck: [24, 80], neckAt: [32, 8], arm: [13, 10], armX: [25, 31], leg: [20, 10], kneeAt: [11, 61], knee: [11, 7], ankleAt: [12, 55], ankle: [12, 7], legX: [-4, 5], legY: -130 },
-    back: { hip: [32, 167], neck: [25, 80], neckAt: [40, 8], arm: [12, 10], armX: [18, 60], hipX: 9, leg: [20, 10] },
-    bodyY: -88, sideBodyY: -88, legY: -130,
+  ...figureUndead('screamer', GAITS.screamer, {
+    height: 297,
+    front: { legL: { pivot: [29, 0], at: [-19.8, -139.2] }, legR: { pivot: [67.9, 0], at: [19.2, -139.2] }, body: { pivot: [39.5, 132.7], at: [0, -139.2] },
+      armL: { pivot: [33.6, 12.8], at: [8.5, 26.6] }, armR: { pivot: [0.6, 2.1], at: [64.3, 29.4] }, head: { pivot: [23.6, 29.4], at: [33.7, 4.3] }, legLen: 139.2 },
+    back: { legL: { pivot: [26.1, 0], at: [-13, -137.3] }, legR: { pivot: [57.9, 0], at: [25.6, -137.3] }, body: { pivot: [26.2, 133.6], at: [0, -137.3] },
+      armL: { pivot: [32, 4.8], at: [6.2, 26.3] }, armR: { pivot: [7.1, 9.9], at: [56.3, 26.2] }, head: { pivot: [21.2, 30.4], at: [31, 4.3] }, legLen: 137.3 },
+    side: { body: { pivot: [39.3, 120.1], at: [0, -138.3] }, head: { pivot: [22.4, 42.9], at: [25.8, 4.3] }, arm: { pivot: [-2.2, 6.2], at: [51.2, 16.7] },
+      thigh: { pivot: [26.1, 4], at: [0, -134.3] }, shin: { pivot: [18, 7], at: [18, 64] }, foot: { pivot: [21, 7], at: [21, 58] } },
   }),
-  ...undeadViews('brute', GAITS.brute, {
-    height: 369, armY: 24,
-    front: { hip: [61, 144], neck: [28, 69], neckAt: [60, 8], arm: [24, 10], armX: [23, 95], hipX: 15, leg: [30, 10] },
-    side: { hip: [46, 179], neck: [30, 69], neckAt: [62, 8], arm: [28, 10], armX: [53, 59], leg: [29, 10], kneeAt: [28, 89], knee: [28, 7], ankleAt: [25, 77], ankle: [25, 7], legX: [-4, 5], legY: -180 },
-    back: { hip: [62, 173], neck: [33, 69], neckAt: [58, 8], arm: [26, 10], armX: [22, 99], hipX: 14, leg: [28, 10] },
-    bodyY: -157, sideBodyY: -157, legY: -180,
+  ...figureUndead('brute', GAITS.brute, {
+    height: 352,
+    front: { legL: { pivot: [60.6, 0], at: [-32.8, -178.3] }, legR: { pivot: [33.1, 0], at: [33.1, -178.3] }, body: { pivot: [97.9, 143.9], at: [0, -178.3] },
+      armL: { pivot: [44.7, 15.5], at: [36.4, 26.7] }, armR: { pivot: [16.1, 14.9], at: [159.1, 26.6] }, head: { pivot: [58.9, 34.8], at: [97.4, 5] }, legLen: 178.3 },
+    back: { legL: { pivot: [60.7, 0], at: [-32.3, -176.6] }, legR: { pivot: [32.6, 0], at: [32.7, -176.6] }, body: { pivot: [98, 145.5], at: [0, -176.6] },
+      armL: { pivot: [44.7, 13.7], at: [36.4, 26.1] }, armR: { pivot: [16.5, 13.5], at: [159.5, 26] }, head: { pivot: [56.9, 34.9], at: [97.7, 5] }, legLen: 176.6 },
+    side: { body: { pivot: [45.6, 147.6], at: [0, -177.9] }, head: { pivot: [26.1, 31.5], at: [41.5, 5] }, arm: { pivot: [-6.5, 22.2], at: [54.5, 34.2] },
+      thigh: { pivot: [35.7, 4], at: [0, -173.9] }, shin: { pivot: [28, 7], at: [28, 83] }, foot: { pivot: [38, 7], at: [38, 73] } },
   }),
 };
 
 // Both zombies share one structure, with their own art, measurements and gait. Each has one
 // arm raised and one dangling, and rocks and lolls with its limp. In the side view they reach ahead.
-function undeadViews(k, g, m) {
+// Zombies and monsters, cut from one full figure per view so every part matches. `m` holds each
+// part's joint as measured on the figure: `pivot` inside the part's image, `at` where it attaches.
+// From the side they reach forward with both arms, drawn as one part.
+function figureUndead(k, g, m) {
   const Cap = (s) => k + s;
   const tip = (p) => g.lean * p.flow + 0.03 + sin(p.t * 1.7) * 0.03 + (g.lurch + sin(p.cycle) * g.lurch) * p.flow;
   const loll = (p, phase) => sin(p.t * 2.3 + phase) * 0.08 + sin(p.cycle + phase) * 0.13 * p.flow - g.lurch * p.flow;
-  const facing = (view, images) => {
-    const v = m[view];
-    return {
-      height: m.height,
-      parts: {
-        legL: { img: images.leg, mirror: true, pivot: v.leg, at: [-v.hipX, m.legY], z: 1,
-          off: (p) => [0, -p.bob], stretch: (p) => stepToward(p, 0, g.leg, g.dragged === 0 ? 8 : g.lift) },
-        legR: { img: images.leg, pivot: v.leg, at: [v.hipX, m.legY], z: 1,
-          off: (p) => [0, -p.bob], stretch: (p) => stepToward(p, Math.PI, g.leg, g.dragged === 0.5 ? 8 : g.lift) },
-        body: { img: images.body, pivot: v.hip, at: [0, m.bodyY], z: 2,
-          rot: (p) => sin(p.t * 1.7) * 0.03 + (g.lurch + sin(p.cycle) * g.lurch) * p.flow, off: (p) => [0, -p.bob] },
-        armL: { img: images.arm, parent: 'body', pivot: v.arm, at: [v.armX[0], m.armY], z: 4,
-          rot: (p) => 0.07 + sin(p.t * 3 + 1) * 0.03, stretch: (p) => armSwing(p, -0.8) },
-        armR: { img: images.arm, mirror: true, parent: 'body', pivot: v.arm, at: [v.armX[1], m.armY], z: 4,
-          rot: (p) => -0.1 - sin(p.t * 3) * 0.03, stretch: (p) => 0.72 + sin(p.t * 3) * 0.03 - sin(p.cycle) * 0.03 * p.flow },
-        head: { img: images.head, parent: 'body', pivot: v.neck, at: v.neckAt, z: 6, rot: (p) => loll(p, 0.6) },
-      },
-    };
-  };
+  const facing = (v, pre, dir) => ({
+    height: m.height,
+    parts: {
+      legL: { img: Cap(pre + 'LegL'), ...v.legL, z: 1, rot: () => -STANCE,
+        off: (p) => [0, g.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0, v.legLen, g, dir) },
+      legR: { img: Cap(pre + 'Leg'), ...v.legR, z: 1, rot: () => STANCE,
+        off: (p) => [0, g.crouch * p.flow - p.bob], stretch: (p) => stepToward(p, 0.5, v.legLen, g, dir) },
+      body: { img: Cap(pre + 'Body'), ...v.body, z: 2,
+        rot: (p) => sin(p.t * 1.7) * 0.03 + (g.lurch + sin(p.cycle) * g.lurch) * p.flow, off: (p) => [0, g.crouch * p.flow - p.bob] },
+      armL: { img: Cap(pre + 'ArmL'), parent: 'body', ...v.armL, z: 1.5,
+        rot: (p) => -0.1 + sin(p.t * 3 + 1) * 0.03, stretch: (p) => armSwing(p, -0.8) },
+      armR: { img: Cap(pre + 'Arm'), parent: 'body', ...v.armR, z: 1.5,
+        rot: (p) => 0.1 - sin(p.t * 3) * 0.03, stretch: (p) => armSwing(p, Math.PI) },
+      head: { img: Cap(pre + 'Head'), parent: 'body', ...v.head, z: 6, rot: (p) => loll(p, 0.6) },
+    },
+  });
   const s = m.side;
   return {
-    [k]: facing('front', { leg: Cap('Leg'), body: Cap('Body'), arm: Cap('Arm'), head: Cap('Head') }),
-    [k + 'Back']: facing('back', { leg: Cap('BackLeg'), body: Cap('BackBody'), arm: Cap('BackArm'), head: Cap('BackHead') }),
+    [k]: facing(m.front, '', 1),
+    [k + 'Back']: facing(m.back, 'Back', -1),
     // Faces right; drawRig flips it to face left.
     [k + 'Side']: {
       height: m.height,
       parts: {
-        farThigh: { img: Cap('SideThighFar'), pivot: s.leg, at: [s.legX[1], s.legY], z: 0, off: (p) => [0, -p.bob], rot: (p) => runLeg(p, 0.5, g)[0] },
-        farFoot: { img: Cap('SideFootFar'), parent: 'farShin', pivot: s.ankle, at: s.ankleAt, z: 0, rot: (p) => runLeg(p, 0.5, g)[2] },
-        farShin: { img: Cap('SideShinFar'), parent: 'farThigh', pivot: s.knee, at: s.kneeAt, z: 0, rot: (p) => runLeg(p, 0.5, g)[1] },
-        armFar: { img: Cap('SideArm'), parent: 'body', pivot: s.arm, at: [s.armX[1], m.armY], z: 1,
-          rot: (p) => -0.95 + sin(p.t * 3 + 1) * 0.07 + sin(p.cycle + 1) * 0.14 * p.flow },
-        thigh: { img: Cap('SideThigh'), pivot: s.leg, at: [s.legX[0], s.legY], z: 2, off: (p) => [0, -p.bob], rot: (p) => runLeg(p, 0, g)[0] },
-        foot: { img: Cap('SideFoot'), parent: 'shin', pivot: s.ankle, at: s.ankleAt, z: 2, rot: (p) => runLeg(p, 0, g)[2] },
-        shin: { img: Cap('SideShin'), parent: 'thigh', pivot: s.knee, at: s.kneeAt, z: 2, rot: (p) => runLeg(p, 0, g)[1] },
-        body: { img: Cap('SideBody'), pivot: s.hip, at: [0, m.sideBodyY], z: 3, rot: tip, off: (p) => [0, -p.bob] },
-        head: { img: Cap('SideHead'), parent: 'body', pivot: s.neck, at: s.neckAt, z: 6, rot: (p) => loll(p, 0.6) - g.lean * p.flow },
-        armNear: { img: Cap('SideArm'), parent: 'body', pivot: s.arm, at: [s.armX[0], m.armY], z: 5,
-          rot: (p) => -1.25 + sin(p.t * 2.6) * 0.06 + sin(p.cycle) * 0.07 * p.flow },
+        farThigh: { img: Cap('SideThighFar'), pivot: s.thigh.pivot, at: [s.thigh.at[0] + 6, s.thigh.at[1]], z: 0,
+          off: (p) => [0, g.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0.5, g)[0] },
+        farShin: { img: Cap('SideShinFar'), parent: 'farThigh', ...s.shin, z: 0, rot: (p) => runLeg(p, 0.5, g)[1] },
+        farFoot: { img: Cap('SideFootFar'), parent: 'farShin', ...s.foot, z: 0, rot: (p) => runLeg(p, 0.5, g)[2] },
+        thigh: { img: Cap('SideThigh'), pivot: s.thigh.pivot, at: [s.thigh.at[0] - 2, s.thigh.at[1]], z: 2,
+          off: (p) => [0, g.crouch * p.flow - p.bob], rot: (p) => runLeg(p, 0, g)[0] },
+        shin: { img: Cap('SideShin'), parent: 'thigh', ...s.shin, z: 2, rot: (p) => runLeg(p, 0, g)[1] },
+        foot: { img: Cap('SideFoot'), parent: 'shin', ...s.foot, z: 2, rot: (p) => runLeg(p, 0, g)[2] },
+        body: { img: Cap('SideBody'), ...s.body, z: 3, rot: tip, off: (p) => [0, g.crouch * p.flow - p.bob] },
+        head: { img: Cap('SideHead'), parent: 'body', ...s.head, z: 6, rot: (p) => loll(p, 0.6) - g.lean * p.flow },
+        arms: { img: Cap('SideArm'), parent: 'body', ...s.arm, z: 5,
+          rot: (p) => 0.12 - g.lean * p.flow * 0.5 + sin(p.t * 2.6) * 0.06 + sin(p.cycle) * 0.07 * p.flow },
       },
     },
   };
 }
 
+
 // Default pose; callers override what they animate.
 export function pose(over = {}) {
-  return { t: 0, walk: 0, bob: 0, swing: 0, slashLean: 0, hurt: 0, alert: 0, flow: 0, cycle: 0, drag: 0, lantern: 0, lunge: 0, sink: 0, ...over };
+  return { t: 0, walk: 0, bob: 0, swing: 0, slashLean: 0, hurt: 0, alert: 0, flow: 0, cycle: 0, drag: 0, lantern: 0, lunge: 0, sink: 0, stab: 0, gun: 0, blade: 1, ...over };
 }
 
 // Pre-sorted draw list per rig.
@@ -369,7 +788,7 @@ export function drawRig(ctx, images, rig, p, x, y, h, { flip = false, alpha = 1 
   ctx.scale(flip ? -s : s, s);
   for (const [name, part] of drawOrder(rig)) {
     const img = images[part.img];
-    if (!img) continue;
+    if (!img || (part.show && !part.show(p))) continue;
     ctx.save();
     applyChain(ctx, rig, name, p);
     if (part.stretch) ctx.scale(1, part.stretch(p));
@@ -392,7 +811,7 @@ export const RIG_IMAGES = {
   reaperBody: 'reaper-body', reaperHead: 'reaper-head', reaperArmBack: 'reaper-arm-back',
   reaperArmFront: 'reaper-arm-front', reaperScythe: 'reaper-scythe', reaperLantern: 'reaper-lantern',
   reaperSideHead: 'reaper-side-head', reaperSideBody: 'reaper-side-body', reaperSideArm: 'reaper-side-arm',
-  reaperBackHead: 'reaper-back-head', reaperBackBody: 'reaper-back-body', reaperBackArm: 'reaper-back-arm',
+  reaperBackHead: 'reaper-back-head', reaperBackBody: 'reaper-back-body', reaperBackArm: 'reaper-back-arm', reaperBackArmL: 'reaper-back-arm-l',
   zombieHead: 'zombie-head', zombieBody: 'zombie-body', zombieArm: 'zombie-arm', zombieLeg: 'zombie-leg',
   zombieSideHead: 'zombie-side-head', zombieSideBody: 'zombie-side-body', zombieSideArm: 'zombie-side-arm',
   zombieSideThigh: 'zombie-side-thigh', zombieSideShin: 'zombie-side-shin', zombieSideFoot: 'zombie-side-foot',
@@ -407,7 +826,9 @@ export const RIG_IMAGES = {
   maraSideHead: 'mara-side-head', maraSideBody: 'mara-side-body', maraSideArm: 'mara-side-arm', maraSideArmFront: 'mara-side-arm-front',
   maraSideThigh: 'mara-side-thigh', maraSideShin: 'mara-side-shin', maraSideFoot: 'mara-side-foot',
   maraSideThighFar: 'mara-side-thigh-far', maraSideShinFar: 'mara-side-shin-far', maraSideFootFar: 'mara-side-foot-far',
+  maraKnife: 'mara-knife', maraMachete: 'mara-machete', maraPistol: 'mara-pistol',
   maraBackHead: 'mara-back-head', maraBackBody: 'mara-back-body', maraBackArm: 'mara-back-arm', maraBackLeg: 'mara-back-leg',
+  maraLegL: 'mara-leg-l', maraBackLegL: 'mara-back-leg-l', maraBackArmL: 'mara-back-arm-l', maraTorch: 'mara-torch', maraTorchSide: 'mara-torch-side',
   stalkerHead: 'stalker-head',
   stalkerBody: 'stalker-body',
   stalkerArm: 'stalker-arm',
@@ -459,6 +880,11 @@ export const RIG_IMAGES = {
   bruteBackBody: 'brute-back-body',
   bruteBackArm: 'brute-back-arm',
   bruteBackLeg: 'brute-back-leg',
+  zombieLegL: 'zombie-leg-l', zombieArmL: 'zombie-arm-l', zombieBackLegL: 'zombie-back-leg-l', zombieBackArmL: 'zombie-back-arm-l',
+  zgirlLegL: 'zgirl-leg-l', zgirlArmL: 'zgirl-arm-l', zgirlBackLegL: 'zgirl-back-leg-l', zgirlBackArmL: 'zgirl-back-arm-l',
+  stalkerLegL: 'stalker-leg-l', stalkerArmL: 'stalker-arm-l', stalkerBackLegL: 'stalker-back-leg-l', stalkerBackArmL: 'stalker-back-arm-l',
+  screamerLegL: 'screamer-leg-l', screamerArmL: 'screamer-arm-l', screamerBackLegL: 'screamer-back-leg-l', screamerBackArmL: 'screamer-back-arm-l',
+  bruteLegL: 'brute-leg-l', bruteArmL: 'brute-arm-l', bruteBackLegL: 'brute-back-leg-l', bruteBackArmL: 'brute-back-arm-l',
   crawlerFront: 'crawler-front',
   crawlerSide: 'crawler-side',
   crawlerBack: 'crawler-back',

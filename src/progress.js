@@ -3,7 +3,7 @@
 // wallet change leaves a ledger line. Time is always passed in, for testable clocks.
 import {
   REWARDS, XP, UPGRADES, ACHIEVEMENTS, MISSIONS, DAILY_TRACK, JOURNAL_TIERS, LIMITS,
-  cosmeticById, upgradeById, eventById,
+  cosmeticById, upgradeById, eventById, heroById,
 } from './catalog.js';
 
 const fail = (reason, extra = {}) => ({ ok: false, reason, ...extra });
@@ -22,12 +22,27 @@ export function runLoadout(save, eventId = null) {
   const ev = eventId ? eventById(eventId) : null;
   const upgrades = Object.fromEntries(UPGRADES.map((u) => [u.id, ev ? 0 : save.upgradeLevels[u.id]]));
   const value = (id) => upgradeById(id).values[upgrades[id]];
+  // The chosen heroes play with their own perks, on top of (never below) the bought upgrades.
+  const heroes = { keeper: save.heroes.selected.keeper, survivor: save.heroes.selected.survivor };
+  const kp = heroById(heroes.keeper).perks, sp = heroById(heroes.survivor).perks;
   return {
     eventId,
     upgrades,
+    heroes,
     equipped: JSON.parse(JSON.stringify(save.equippedByCampaign)),
-    keeper: { waveCounts: ev?.waveCounts ?? null, pulseCooldown: value('pulseRecovery'), soulReach: value('soulReach') },
-    survivor: { distractCooldown: value('distractRecovery'), distractDuration: value('lastingRattle') },
+    keeper: {
+      waveCounts: ev?.waveCounts ?? null,
+      pulseCooldown: value('pulseRecovery') * (kp.pulseCooldown ?? 1), soulReach: value('soulReach'),
+      maxHealth: kp.maxHealth ?? 3, slashRange: kp.slashRange ?? 1, slashArc: kp.slashArc ?? 1,
+      slashCooldown: kp.slashCooldown ?? 1, pulseWounds: !!kp.pulseWounds,
+    },
+    survivor: {
+      distractCooldown: value('distractRecovery'), distractDuration: value('lastingRattle'),
+      blade: Math.max(value('blade'), sp.blade ?? 1),
+      rounds: Math.max(value('pistol'), sp.rounds ?? 0),
+      pistolLevel: Math.max(upgrades.pistol, sp.pistolLevel ?? 0),
+      secondWind: sp.secondWind ?? 0, speed: sp.speed ?? 1,
+    },
   };
 }
 
@@ -115,6 +130,33 @@ export function commitRun(save, summary, now) {
   save.processedRunIds.push(summary.id);
   if (save.processedRunIds.length > LIMITS.processedRunIds) save.processedRunIds.shift();
   return { ok: true, ...rewards, ...notes, walletBefore: before, walletAfter: save.wallet.graveCoins };
+}
+
+// ---------------- Heroes ----------------
+
+export const ownsHero = (save, id) => {
+  const h = heroById(id);
+  return !!h && (h.cost === 0 || save.heroes.owned.includes(id));
+};
+
+export function buyHero(save, id, now) {
+  const h = heroById(id);
+  if (!h || h.cost === 0) return fail('unknown');
+  if (save.heroes.owned.includes(id)) return fail('owned');
+  if (save.wallet.graveCoins < h.cost) return fail('funds', { need: h.cost - save.wallet.graveCoins });
+  save.wallet.graveCoins -= h.cost;
+  save.heroes.owned.push(id);
+  save.heroes.selected[h.campaign] = id;
+  save.ledger.push({ source: 'hero', id, amount: -h.cost, at: now });
+  return { ok: true, spent: h.cost };
+}
+
+export function selectHero(save, id) {
+  const h = heroById(id);
+  if (!h) return fail('unknown');
+  if (!ownsHero(save, id)) return fail('locked');
+  save.heroes.selected[h.campaign] = id;
+  return { ok: true };
 }
 
 // ---------------- Shop, equipment, upgrades ----------------

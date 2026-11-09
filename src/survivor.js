@@ -4,41 +4,43 @@ import { SKILLS } from './catalog.js';
 
 // '#' building, 'x' cars, bins, planters and trees (solid), '.' street, 'P' start,
 // 'F' maintenance kiosk (fuse), 'B' refuge power box, 'L' plaza bell, 'R' town hall door (the refuge).
-// Avenues are two tiles wide; buildings stand on large lots between them.
+// Avenues are two tiles wide; buildings stand on large lots between them. The old town is the west
+// half; the east district (from column 22) has a park, the bell's plaza and a car park. The tasks
+// are spread across both, so a run crosses the whole city: fuse far west, power far east.
 export const SURVIVOR_MAP = [
-  '#######################',
-  '#.....................#',
-  '#.....................#',
-  '#..####..#####..####..#',
-  '#x.####..#####..####.x#',
-  '#..####..#####..####..#',
-  '#..####..##R##..####..#',
-  '#.....................#',
-  '#.....................#',
-  '#..####..##.##..####..#',
-  '#..####..##.##..####.B#',
-  '#..####.x##.##..####..#',
-  '#..####..##.##..####..#',
-  '#.....................#',
-  '#.....................#',
-  '#..####..x...x..####..#',
-  '#F.####....L....####..#',
-  '#..####..x...x..####..#',
-  '#.....................#',
-  '#.....................#',
-  '#..x..x..#####.x####..#',
-  '#........#####........#',
-  '#...x....#####..####.x#',
-  '#..x..x..#####..####..#',
-  '#.....................#',
-  '#.....................#',
-  '#..#.##..#####..####..#',
-  '#..#.##..#####..####..#',
-  '#x.#.##..#####..####.x#',
-  '#..#.##..#####..####..#',
-  '#.......x..P..x.......#',
-  '#.....................#',
-  '#######################',
+  '###########################################',
+  '#.........................................#',
+  '#.............................x...........#',
+  '#..####..#####..####..####..#####..#####..#',
+  '#x.####..#####..####.x####..#####..#####..#',
+  '#..####..#####..####..####..#####..#####..#',
+  '#..####..##R##..####..####..#####..#####..#',
+  '#.........................................#',
+  '#....................................x....#',
+  '#..####..##.##..####..####.....x...#####..#',
+  '#..####..##.##..####..####...x.....#####.B#',
+  '#..####.x##.##..####..####.........#####..#',
+  '#..####..##.##..####..####..x..x...#####..#',
+  '#.........................................#',
+  '#.......................x.................#',
+  '#..####..x...x..####..####..x...x..#####..#',
+  '#F.####.........####..####....L....#####..#',
+  '#..####..x...x..####..####..x...x..#####..#',
+  '#.........................................#',
+  '#...................................x.....#',
+  '#..x..x..#####.x####..####..#####..#####..#',
+  '#........#####........####..#####..#####..#',
+  '#...x....#####..####.x####..#####..#####..#',
+  '#..x..x..#####..####..####..#####..#####..#',
+  '#.........................................#',
+  '#............................x............#',
+  '#..#.##..#####..####..####..#####.........#',
+  '#..#.##..#####..####..####..#####...x.x...#',
+  '#x.#.##..#####..####.x####..#####.........#',
+  '#..#.##..#####..####..####..#####...x..x..#',
+  '#.......x..P..x...........................#',
+  '#.....................................x...#',
+  '###########################################',
 ];
 
 // Patrol loops in tile coordinates; consecutive points share a row or column of open street.
@@ -50,6 +52,12 @@ export const PATROLS = [
   [[8, 14], [8, 25]],                     // west-centre avenue
   [[2, 18], [7, 18], [7, 24], [2, 24]],   // around the park
   [[20, 14], [20, 25]],                   // east avenue
+  // The east district.
+  [[23, 7], [41, 7]],                     // east district, north cross-street
+  [[27, 8], [27, 24]],                    // beside the park and the plaza
+  [[34, 8], [34, 30]],                    // east district, long avenue
+  [[40, 2], [40, 30]],                    // the far east edge
+  [[23, 24], [41, 24]],                   // east district, south cross-street
 ];
 
 export const SURVIVOR = {
@@ -66,6 +74,15 @@ export const SURVIVOR = {
   investigateSpeed: 1.8,
 };
 
+// Mara's weapons. A hit stuns a zombie so she can slip past; only the top upgrades can kill.
+// The worse things are tougher: they take several killing hits and shake off stuns faster.
+export const WEAPONS = {
+  knife: { reach: 1.15, halfAngle: (70 * Math.PI) / 180, cooldown: 0.7, stun: [0, 3, 4, 5] },
+  pistol: { range: 5.5, halfAngle: (12 * Math.PI) / 180, cooldown: 0.5, stun: 4, loud: 6, listen: 3 },
+  toughness: { walker: 1, screamer: 2, crawler: 2, stalker: 3, brute: 4 },
+  stunScale: { walker: 1, screamer: 0.75, crawler: 0.75, stalker: 0.6, brute: 0.5 },
+};
+
 // The worse things in the city. Each has its own rule that changes how you play around it.
 export const MONSTERS = {
   // Hunts you by sound wherever you are, but can't move while your flashlight is on it.
@@ -75,7 +92,7 @@ export const MONSTERS = {
   // Slow and huge. Distractions don't work on it, and it smashes cars and trees in its way.
   brute: { route: 5, r: 0.42, contact: 0.64, patrolSpeed: 0.85, chaseSpeed: 1.85 },
   // Hides beside a parked car, rattles, then lunges.
-  crawler: { r: 0.28, trigger: 2.3, rattle: 0.45, lungeSpeed: 4.0, lungeTime: 1.0, crawlSpeed: 1.0, rest: 4, lairs: [[20, 4], [2, 28]] },
+  crawler: { r: 0.28, trigger: 2.3, rattle: 0.45, lungeSpeed: 4.0, lungeTime: 1.0, crawlSpeed: 1.0, rest: 4, lairs: [[20, 4], [2, 28], [37, 27]] },
 };
 
 export const TASKS = [
@@ -127,7 +144,14 @@ export function createSurvivorRun(loadout = {}) {
   }
   return {
     campaign: 'survivor',
-    rules: { distractCooldown: loadout.distractCooldown ?? 22, distractDuration: loadout.distractDuration ?? 3 },
+    rules: {
+      distractCooldown: loadout.distractCooldown ?? 22, distractDuration: loadout.distractDuration ?? 3,
+      speed: SURVIVOR.playerSpeed * (loadout.speed ?? 1),
+    },
+    lives: loadout.secondWind ?? 0, // Theo: the first catch only knocks him back
+    shaken: 0,                       // seconds of safety after a second wind
+    // blade 1-3: knife, sharpened knife, machete (kills). pistolLevel 0-2: none, pistol, heavy pistol (kills).
+    weapon: { blade: loadout.blade ?? 1, rounds: loadout.rounds ?? 0, pistolLevel: loadout.pistolLevel ?? 0, cooldown: 0, swing: null },
     skillCooldown: 0,
     noise: null, // { x, y, t }: where the last noise-maker landed
     map,
@@ -226,7 +250,7 @@ export function stepSurvivor(run, input, dt) {
   if (p.moving) {
     p.fx = input.x / mag;
     p.fy = input.y / mag;
-    moveCircle(run.map, p, input.x * SURVIVOR.playerSpeed * dt, input.y * SURVIVOR.playerSpeed * dt, solid);
+    moveCircle(run.map, p, input.x * run.rules.speed * dt, input.y * run.rules.speed * dt, solid);
   }
 
   // ---- Distraction ----
@@ -237,7 +261,15 @@ export function stepSurvivor(run, input, dt) {
   }
   if (input.skill && run.skillCooldown === 0) useDistraction(run, events);
 
-  // ---- Interaction ----
+  // ---- Weapon ----
+  const w = run.weapon;
+  w.cooldown = Math.max(0, w.cooldown - dt);
+  if (w.swing) { w.swing.t += dt; if (w.swing.t > 0.25) w.swing = null; }
+
+  // ---- The weapon: its own button, like the Keeper's slash ----
+  if (input.attack && w.cooldown === 0) attack(run, events);
+
+  // ---- Using things: the fuse, the power box, the bell ----
   if (input.action) {
     const it = interactionTarget(run);
     if (it && it.enabled) {
@@ -259,13 +291,28 @@ export function stepSurvivor(run, input, dt) {
 
   // ---- Zombies ----
   for (const z of run.zombies) {
+    // A stunned zombie stays down: it can't move, see or catch anyone until it recovers.
+    if (z.stun > 0) {
+      z.stun -= dt;
+      if (z.stun <= 0) { z.stun = 0; z.state = recoverState(z); z.field = null; events.push({ type: 'recovered', id: z.id }); }
+      continue;
+    }
     if (z.kind === 'stalker') updateStalker(run, z, dt, solid, events);
     else if (z.kind === 'crawler') updateCrawler(run, z, dt, solid, events);
     else updateZombie(run, z, dt, z.kind === 'brute' ? bruteSolid(run, solid) : solid, events);
     if (z.state === 'dormant' || z.state === 'lurk') continue;
     const reach = z.kind === 'brute' ? MONSTERS.brute.contact : SURVIVOR.contact;
-    if (dist2(z, p) < reach ** 2) { caught = true; run.caughtBy = z.kind; }
+    if (dist2(z, p) < reach ** 2 && run.shaken <= 0) {
+      if (run.lives > 0) {
+        // A second wind: the zombie reels back stunned and he has a moment to get away.
+        run.lives--;
+        run.shaken = 1.5;
+        hitZombie(run, z, 3, false, events);
+        events.push({ type: 'secondWind', lives: run.lives });
+      } else { caught = true; run.caughtBy = z.kind; }
+    }
   }
+  run.shaken = Math.max(0, run.shaken - dt);
 
   if (caught) {
     run.outcome = { result: 'defeat', reason: 'caught' };
@@ -328,6 +375,86 @@ function updateZombie(run, z, dt, solid, events) {
     }
   }
   if (z.kind === 'brute') smashUnder(run, z, events);
+}
+
+// ---------------- Mara's weapons ----------------
+
+function recoverState(z) {
+  if (z.kind === 'stalker') return 'hunt';
+  if (z.kind === 'crawler') return 'return';
+  z.lastSeen = null;
+  return 'return';
+}
+
+// The zombies she could hit: awake, not already down, in front of her and in plain sight.
+function inArc(run, z, reach, half) {
+  const p = run.player;
+  if (z.state === 'dormant' || z.state === 'lurk' || z.stun > 0) return false;
+  const dx = z.x - p.x, dy = z.y - p.y, d = Math.hypot(dx, dy);
+  if (d > reach + z.r) return false;
+  if (d > 0.3 && (dx * p.fx + dy * p.fy) / d < Math.cos(half)) return false;
+  return lineOfSight(run.map, p.x, p.y, z.x, z.y, solidFor(run));
+}
+
+const nearestOf = (run, list) => list.reduce((a, z) => (!a || dist2(z, run.player) < dist2(a, run.player) ? z : a), null);
+
+function hitZombie(run, z, stun, kills, events) {
+  if (kills) {
+    z.hp = (z.hp ?? WEAPONS.toughness[z.kind] ?? 1) - 1;
+    if (z.hp <= 0) {
+      run.zombies = run.zombies.filter((o) => o !== z);
+      run.downed = (run.downed || 0) + 1;
+      events.push({ type: 'zombieDown', id: z.id, x: z.x, y: z.y });
+      return;
+    }
+  }
+  z.stun = stun * (WEAPONS.stunScale[z.kind] ?? 1);
+  z.state = 'stunned';
+  z.field = null;
+  events.push({ type: 'stunned', id: z.id, x: z.x, y: z.y, time: z.stun });
+}
+
+// What a press would do now, for the HUD: 'stab', 'shoot', or null when nothing is in reach.
+export function attackPreview(run) {
+  const K = WEAPONS.knife, G = WEAPONS.pistol;
+  if (run.zombies.some((z) => inArc(run, z, K.reach, K.halfAngle))) return 'stab';
+  if (run.weapon.rounds > 0 && run.zombies.some((z) => inArc(run, z, G.range, G.halfAngle))) return 'shoot';
+  return null;
+}
+
+// Knife first when something is close; the pistol for anything further off in her line of fire.
+// With nothing in reach she still swings the knife at the air.
+function attack(run, events) {
+  const w = run.weapon, p = run.player, K = WEAPONS.knife, G = WEAPONS.pistol;
+  const close = nearestOf(run, run.zombies.filter((z) => inArc(run, z, K.reach, K.halfAngle)));
+  if (close) {
+    w.cooldown = K.cooldown;
+    w.swing = { t: 0, angle: Math.atan2(p.fy, p.fx), hit: true };
+    events.push({ type: 'stab', hit: true, x: close.x, y: close.y });
+    hitZombie(run, close, K.stun[w.blade], w.blade >= 3, events);
+    return true;
+  }
+  if (w.rounds > 0) {
+    const far = nearestOf(run, run.zombies.filter((z) => inArc(run, z, G.range, G.halfAngle)));
+    if (far) {
+      w.rounds--;
+      w.cooldown = G.cooldown;
+      events.push({ type: 'shot', x0: p.x, y0: p.y, x1: far.x, y1: far.y, rounds: w.rounds });
+      hitZombie(run, far, G.stun, w.pistolLevel >= 2, events);
+      // A gunshot is loud: everything near that isn't already on her comes to look.
+      for (const z of run.zombies) {
+        if (z === far || z.stun > 0 || z.state === 'dormant' || z.state === 'lurk' || z.state === 'chase') continue;
+        if (dist2(z, p) > G.loud ** 2) continue;
+        if (z.kind === 'stalker' || z.kind === 'crawler') continue;
+        z.state = 'investigate'; z.investigate = G.listen; z.noiseAt = tileOf(p); z.field = null;
+      }
+      return true;
+    }
+  }
+  w.cooldown = K.cooldown;
+  w.swing = { t: 0, angle: Math.atan2(p.fy, p.fx), hit: false };
+  events.push({ type: 'stab', hit: false });
+  return true;
 }
 
 // ---------------- The worse things ----------------

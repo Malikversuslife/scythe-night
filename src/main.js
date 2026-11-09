@@ -4,15 +4,16 @@ import { createRenderer } from './render.js';
 import { KEEPER_IMAGES } from './render-keeper.js';
 import { SURVIVOR_IMAGES } from './render-survivor.js';
 import { createKeeperRun, stepKeeper, KEEPER } from './keeper.js';
-import { createSurvivorRun, stepSurvivor, interactionTarget, taskIndex, TASKS } from './survivor.js';
+import { createSurvivorRun, stepSurvivor, interactionTarget, attackPreview, taskIndex, TASKS } from './survivor.js';
 import * as audio from './audio.js';
-import { COSMETICS, EVENTS, eventById, SKILLS } from './catalog.js';
-import { runLoadout, commitRun, claimableCounts } from './progress.js';
+import { COSMETICS, EVENTS, eventById, SKILLS, HEROES, heroById } from './catalog.js';
+import { runLoadout, commitRun, claimableCounts, buyHero, selectHero, ownsHero } from './progress.js';
 import { createScreens, coinTag, formatTime, skinFor } from './screens.js';
 import { drawPreview } from './render.js';
 import { submitScore } from './leaderboard.js';
 import { cleanName, NAME_MAX } from './leaderboard-rules.mjs';
 import { setupMenuNav } from './nav.js';
+import { createMinimap } from './minimap.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -25,7 +26,7 @@ const CAMPAIGNS = {
     story: 'Pip finds the cracked bell of Hush Hollow swinging without sound. Green sparks flicker between the graves, and the restless dead are shuffling toward the city gate. A notice on the keeper’s hut reads: “One night. No escapes. Please mind the flowers.”',
     rules: [
       'Slash undead to free their lime-green souls, then walk over a soul to guide it home.',
-      'You have <strong>3 health</strong>. Each hit costs one; you flash briefly after a hit.',
+      'Each hit costs a <strong>heart</strong> (Pip has three); you flash briefly after a hit.',
       'If <strong>3 undead</strong> reach the city gate at the bottom, the city falls.',
       'When a wave is cleared, touch the glowing <strong>seal</strong> to start the next. Seal all 3 waves to win.',
       '<strong>Soul Pulse</strong> shoves nearby undead away. It does no damage, so you still have to slash them.',
@@ -34,15 +35,18 @@ const CAMPAIGNS = {
       'Move: left joystick, or <kbd>WASD</kbd> / arrow keys',
       'Slash (in the direction you face): scythe button, or <kbd>Space</kbd> / <kbd>J</kbd>',
       'Soul Pulse: skill button, or <kbd>K</kbd>',
+      'Map: tap the radar, or <kbd>M</kbd>',
       'Pause: top-right button, or <kbd>Esc</kbd> / <kbd>P</kbd>',
     ],
     actionKeys: ['Space', 'KeyJ'],
+    attackKeys: [],
   },
   survivor: {
     title: 'Last Survivor',
     story: 'Mara reaches an empty tram stop in Bellwick. The route board points to the dawn refuge, but its gate has no power. A handwritten note is pinned beneath it: “Bring the fuse. Ring the bell. We are still here.”',
     rules: [
-      'You have <strong>no weapon</strong>. One touch from a zombie ends the run.',
+      'One touch from a zombie ends the run. Your <strong>knife</strong> stuns a zombie for a few seconds so you can slip past; the worse things shake it off faster.',
+      'Buy a <strong>pistol</strong> in the shop to stun from range, but every shot is loud and draws the dead to you. Top upgrades can kill.',
       'Zombies see you inside their red circle if no wall is in the way. Break line of sight and they give up after a few seconds.',
       'Tasks in order: take the <strong>fuse</strong>, install it in the <strong>power box</strong>, ring the <strong>bell</strong>.',
       'Then step through the open <strong>refuge door</strong> to win. The amber ring and edge arrow show where to go.',
@@ -50,11 +54,14 @@ const CAMPAIGNS = {
     ],
     controls: [
       'Move: left joystick, or <kbd>WASD</kbd> / arrow keys',
-      'Interact when close: hand button, or <kbd>E</kbd> / <kbd>Space</kbd>',
+      'Knife, or the pistol when one is in range: weapon button, or <kbd>Space</kbd> / <kbd>J</kbd>',
+      'Use the fuse, power box and bell: hand button, or <kbd>E</kbd>',
       'Distraction: skill button, or <kbd>K</kbd>',
+      'Map: tap the radar, or <kbd>M</kbd>',
       'Pause: top-right button, or <kbd>Esc</kbd> / <kbd>P</kbd>',
     ],
-    actionKeys: ['KeyE', 'Space'],
+    actionKeys: ['KeyE'],
+    attackKeys: ['Space', 'KeyJ'],
   },
 };
 
@@ -62,6 +69,8 @@ const ICONS = {
   scythe: '<svg viewBox="0 0 48 48"><path d="M30 6 L14 44" stroke="#2b2433" stroke-width="5" stroke-linecap="round"/><path d="M29 7 C 41 5, 47 16, 43 27 C 39 18, 34 13, 26 14 Z" fill="#e7e3ef"/></svg>',
   pulse: '<svg viewBox="0 0 48 48" fill="none" stroke="#baf45a" stroke-linecap="round"><circle cx="24" cy="24" r="6" fill="#baf45a" stroke="none"/><circle cx="24" cy="24" r="13" stroke-width="3.5"/><circle cx="24" cy="24" r="20" stroke-width="3" stroke-dasharray="6 7"/></svg>',
   rattle: '<svg viewBox="0 0 48 48" fill="none" stroke-linecap="round"><rect x="15" y="18" width="18" height="24" rx="5" fill="#ffd789"/><path d="M15 26h18" stroke="#b98a3d" stroke-width="2.5"/><path d="M12 13c2-3 5-5 8-6M36 13c-2-3-5-5-8-6M24 11V4" stroke="#ffd789" stroke-width="3.5"/></svg>',
+  knife: '<svg viewBox="0 0 48 48"><path d="M8 40 L30 18" stroke="#5a3a22" stroke-width="7" stroke-linecap="round"/><path d="M27 21 L42 6 C44 10 40 18 31 25 Z" fill="#e8e6df"/><path d="M24 18 L30 24" stroke="#c9b27a" stroke-width="4" stroke-linecap="round"/></svg>',
+  gun: '<svg viewBox="0 0 48 48"><path d="M8 16 H40 V24 H22 L20 36 H12 L14 24 H8 Z" fill="#cfd3d6"/><path d="M22 24 L24 30 H28" stroke="#cfd3d6" stroke-width="3" fill="none"/></svg>',
   hand: '<svg viewBox="0 0 48 48"><path d="M17 26 V12 a3 3 0 0 1 6 0 V24 V9 a3 3 0 0 1 6 0 V24 V12 a3 3 0 0 1 6 0 V30 c0 8 -5 13 -12 13 c-6 0 -9 -3 -12 -8 l-5 -8 a3 3 0 0 1 5 -3 Z" fill="#ffd789"/></svg>',
 };
 
@@ -72,7 +81,7 @@ const IMAGE_SRC = {
   ...KEEPER_IMAGES,
   ...SURVIVOR_IMAGES,
 };
-const COSMETIC_FILES = [...new Set(COSMETICS.flatMap((c) => Object.values(c.skin)))];
+const COSMETIC_FILES = [...new Set([...COSMETICS, ...HEROES].flatMap((c) => Object.values(c.skin)))];
 const MENU_ART = ['play', 'shop', 'characters', 'upgrades', 'settings', 'records', 'achievements', 'missions', 'daily', 'events', 'journal', 'quit'];
 const PRELOAD = [...MENU_ART.map((n) => `assets/img/menu/${n}.png`), 'assets/img/ui/coin.png',
   // The HUD and controls appear the moment a story starts, so they mustn't still be downloading.
@@ -282,8 +291,67 @@ function goIntro(which) {
   $('intro-controls').innerHTML = c.controls.map((r) => `<li>${r}</li>`).join('');
   setState('intro');
   $('screen-intro').scrollTop = 0;
-  drawPreview($('intro-preview'), which, images, equippedSkin(which).overrides);
+  showHero(HEROES.findIndex((h) => h.id === store.data.heroes.selected[which]));
   $('btn-intro-start').focus({ preventScroll: true });
+}
+
+// ---------------- Hero picker ----------------
+// Left and right step through this story's heroes. Stepping onto an owned hero picks it;
+// a locked one shows its price, and Start waits until it's bought or another hero is chosen.
+let heroShown = null;
+const storyHeroes = () => HEROES.filter((h) => h.campaign === campaign);
+
+function showHero(index) {
+  const list = storyHeroes();
+  const i = ((index - HEROES.indexOf(list[0])) % list.length + list.length) % list.length;
+  const h = list[i];
+  heroShown = h;
+  const owned = ownsHero(store.data, h.id);
+  if (owned && store.data.heroes.selected[campaign] !== h.id) store.transact((d) => selectHero(d, h.id));
+  $('hero-name').textContent = h.name;
+  $('hero-title').textContent = h.title;
+  $('hero-count').textContent = `${i + 1} of ${list.length}`;
+  $('hero-desc').textContent = h.desc;
+  const coins = store.data.wallet.graveCoins;
+  $('hero-status').innerHTML = owned
+    ? `<span class="hero-ready">✓ Playing as ${h.name}</span>`
+    : `<span class="hero-locked">🔒 ${coinTag(h.cost)}</span>` +
+      `<button id="btn-hero-buy" class="stone-btn small primary" type="button"${coins < h.cost ? ' aria-disabled="true"' : ''}>Unlock</button>` +
+      (coins < h.cost ? `<span class="hero-need">You need ${h.cost - coins} more coins.</span>` : '');
+  $('screen-intro').classList.toggle('hero-is-locked', !owned);
+  const start = $('btn-intro-start');
+  start.disabled = !owned;
+  start.title = owned ? '' : `Unlock ${h.name} first`;
+  const loadout = { heroes: { ...store.data.heroes.selected, [campaign]: h.id }, equipped: store.data.equippedByCampaign };
+  drawPreview($('intro-preview'), campaign, images, heroSkin(campaign, loadout).overrides);
+  announce(`${h.name}, ${h.title}. ${owned ? 'Ready to play.' : `Locked, ${h.cost} coins.`}`);
+}
+
+const stepHero = (dir) => { audio.sfx.click(); showHero(HEROES.indexOf(heroShown) + dir); };
+$('btn-hero-prev').addEventListener('click', () => stepHero(-1));
+$('btn-hero-next').addEventListener('click', () => stepHero(1));
+$('hero-status').addEventListener('click', async (e) => {
+  if (!e.target.closest('#btn-hero-buy') || !heroShown) return;
+  const h = heroShown, coins = store.data.wallet.graveCoins;
+  if (coins < h.cost) { audio.sfx.denied(); toast(`You need ${h.cost - coins} more coins`, 1600); return; }
+  const ok = await confirmDialog(`Unlock ${h.name}?`, `This spends ${h.cost} of your ${coins} Grave Coins.`, 'Unlock');
+  if (!ok) return;
+  const result = store.transact((d) => buyHero(d, h.id, Date.now()));
+  if (result.ok) { audio.sfx.coin(); toast(`${h.name} unlocked!`, 1600); }
+  else audio.sfx.denied();
+  refreshGlobal();
+  showHero(HEROES.indexOf(h));
+  $('btn-intro-start').focus({ preventScroll: true });
+});
+// A swipe across the preview steps through the heroes too.
+{
+  let downX = null;
+  const cv = $('intro-preview');
+  cv.addEventListener('pointerdown', (e) => { downX = e.clientX; });
+  cv.addEventListener('pointerup', (e) => {
+    if (downX !== null && Math.abs(e.clientX - downX) > 30) stepHero(e.clientX < downX ? 1 : -1);
+    downX = null;
+  });
 }
 
 // The focus glow is only for people moving around with the keyboard.
@@ -490,8 +558,10 @@ const input = createInput({
   knob: $('joystick-knob'),
   actionBtn: $('btn-action'),
   skillBtn: $('btn-skill'),
+  weaponBtn: $('btn-weapon'),
   surface: $('screen-game'),
   actionKeys: () => CAMPAIGNS[campaign].actionKeys,
+  attackKeys: () => CAMPAIGNS[campaign].attackKeys,
   onPause: () => pause(),
   isActive: () => state === 'playing' && overlayStack.length === 0,
 });
@@ -500,6 +570,20 @@ $('btn-pause').addEventListener('click', () => pause());
 $('btn-hud-sound').addEventListener('click', toggleMute);
 
 // ---------------- Runs ----------------
+
+// The run's look: costumes dress the story's own hero; any other hero wears its own art,
+// keeping only the scythe and lantern costumes that it doesn't replace.
+function heroSkin(which, loadout) {
+  const h = heroById(loadout.heroes[which]);
+  const worn = equippedSkin(which, loadout.equipped);
+  if (h.cost === 0) return { overrides: worn.overrides, glow: worn.glow };
+  const own = {};
+  for (const [key, path] of Object.entries(h.skin)) if (images[path]) own[key] = images[path];
+  const keep = Object.fromEntries(Object.entries(worn.overrides).filter(([key]) => key === 'reaperScythe' || key === 'reaperLantern'));
+  // A hero with its own build stands on its own rig (its joints were measured from its figure).
+  if (h.rig) own.__rig = h.rig;
+  return { overrides: { ...keep, ...own }, glow: worn.glow };
+}
 
 function equippedSkin(which, equipped = store.data.equippedByCampaign) {
   return skinFor(images, Object.values(equipped[which]));
@@ -527,8 +611,8 @@ function startRun(eventId = null) {
   run.loadout = loadout;
   hudCache = {};
   renderer.reset();
-  const skin = equippedSkin(campaign, loadout.equipped);
-  renderer.setSkin(skin.overrides, skin.glow);
+  renderer.setSkin(...Object.values(heroSkin(campaign, loadout)));
+  minimap.toggle(false);
   setupHud();
   setState('playing');
   input.clear();
@@ -696,10 +780,13 @@ function setupHud() {
     $('skill-icon').innerHTML = ICONS.pulse;
   } else {
     icon.innerHTML = ICONS.hand;
-    btn.setAttribute('aria-label', 'Interact (E or Space)');
+    btn.setAttribute('aria-label', 'Use (E)');
     $('skill-icon').innerHTML = ICONS.rattle;
   }
   $('skill-label').textContent = SKILLS[campaign].name;
+  // Last Survivor's weapon has its own button; the Keeper's scythe is the main button.
+  $('weapon-wrap').hidden = campaign !== 'survivor';
+  if (campaign === 'survivor') $('weapon-icon').innerHTML = ICONS.knife;
 }
 
 function updateHud() {
@@ -721,12 +808,12 @@ function updateHud() {
     hudCache.skillCooling = wait > 0;
   }
   if (run.campaign === 'keeper') {
-    const hearts = Array.from({ length: KEEPER.maxHealth }, (_, i) =>
+    const hearts = Array.from({ length: run.rules.maxHealth }, (_, i) =>
       `<img src="assets/img/v2/heart-${i < run.health ? 'full' : 'empty'}.png" alt="">`).join('');
     const warn = run.breaches >= KEEPER.maxBreaches - 1 ? ' warn' : '';
     setHtml($('hud-left'), 'left',
       `<div class="score-panel"><img src="assets/img/v2/hud-lantern.png" alt=""><div><strong>${run.score.toLocaleString()}</strong><span>Score</span></div></div>` +
-      `<div class="hud-row"><div class="heart-row" role="img" aria-label="Health ${run.health} of ${KEEPER.maxHealth}">${hearts}</div>` +
+      `<div class="hud-row"><div class="heart-row" role="img" aria-label="Health ${run.health} of ${run.rules.maxHealth}">${hearts}</div>` +
       `<div class="hud-chip breach${warn}" aria-label="Gate breaches ${run.breaches} of ${KEEPER.maxBreaches}"><span class="lbl">Gate</span>${run.breaches}/${KEEPER.maxBreaches}</div></div>`);
     setHtml($('hud-stats'), 'stats',
       `<div class="wave-box"><span class="lbl">WAVE</span><strong>${run.wave + 1}/${run.rules.waves.length}</strong></div>` +
@@ -750,11 +837,23 @@ function updateHud() {
       `<div class="score-panel task-panel"><img src="assets/img/v2/${icon}.png" alt=""><div><span>Current task</span><strong>${label}</strong></div></div>` +
       `<div class="hud-row" role="img" aria-label="Tasks done ${doneCount} of ${TASKS.length}">${steps}</div>`);
     const t = Math.floor(run.time);
-    setHtml($('hud-stats'), 'stats', `<div class="wave-box"><span class="lbl">TIME</span><strong>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</strong></div>`);
+    const ammo = run.weapon.pistolLevel > 0 ? `<div class="hud-chip" aria-label="Pistol rounds ${run.weapon.rounds}">${run.weapon.rounds} rounds</div>` : '';
+    setHtml($('hud-stats'), 'stats', `<div class="wave-box"><span class="lbl">TIME</span><strong>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</strong></div>${ammo}`);
+    // The hand button uses what's close; the weapon button stabs, or shoots further off.
     const it = interactionTarget(run);
     const btn = $('btn-action');
     btn.setAttribute('aria-disabled', String(!(it && it.enabled)));
-    setHtml($('action-label'), 'act', it ? it.hint : 'Interact');
+    setHtml($('action-label'), 'act', it ? it.hint : 'Use');
+    const strike = attackPreview(run) || 'stab';
+    const rounds = run.weapon.rounds;
+    if (hudCache.weaponMode !== strike) {
+      hudCache.weaponMode = strike;
+      $('weapon-icon').innerHTML = strike === 'shoot' ? ICONS.gun : ICONS.knife;
+    }
+    const wb = $('btn-weapon');
+    wb.classList.toggle('cooldown', run.weapon.cooldown > 0);
+    wb.setAttribute('aria-label', strike === 'shoot' ? `Shoot, ${rounds} rounds (Space or J)` : 'Knife (Space or J)');
+    setHtml($('weapon-label'), 'weapon', strike === 'shoot' ? `Shoot (${rounds})` : 'Knife');
     const hunted = run.zombies.some((z) => z.state === 'chase');
     setHtml($('hud-sub'), 'sub', run.doorOpen ? 'The refuge is open! Get inside.' : hunted ? '<span style="color:#ff8a8a">You’ve been spotted — break line of sight!</span>' : 'One touch and you’re caught.');
   }
@@ -774,7 +873,7 @@ function handleEvents(events) {
       case 'damage':
         audio.sfx.damage();
         flashDamage();
-        announce(`Hit! Health ${ev.health} of ${KEEPER.maxHealth}.`, true);
+        announce(`Hit! Health ${ev.health} of ${run.rules.maxHealth}.`, true);
         break;
       case 'breach':
         audio.sfx.breach();
@@ -821,6 +920,11 @@ function handleEvents(events) {
       case 'lunge': audio.sfx.lunge(); break;
       case 'smash': audio.sfx.smash(); break;
       case 'hit': audio.sfx.hit(); break;
+      case 'stab': if (ev.hit) audio.sfx.hit(); else audio.sfx.slash(); break;
+      case 'shot': audio.sfx.gunshot(); announce(`Shot fired. ${ev.rounds} rounds left. The noise will draw them.`); break;
+      case 'stunned': announce('Zombie stunned.'); break;
+      case 'secondWind': audio.sfx.damage(); flashDamage(); toast('Second wind! Get clear', 1600); announce('Caught, but you shook it off. Run!', true); break;
+      case 'zombieDown': audio.sfx.smash(); announce('Zombie down.'); break;
       case 'pulse': audio.sfx.pulse(); break;
       case 'distraction': audio.sfx.rattle(); break;
       case 'skillDenied':
@@ -925,11 +1029,11 @@ function showResults(r, win, receipt) {
   $('btn-retry').focus({ preventScroll: true });
 }
 
-// Standard Keeper runs with a score go on the shared board by themselves; the database only
-// keeps a player's best. A name is the one thing needed, so without one the form asks for it.
+// Standard runs go on their story's board by themselves: Keeper runs with a score, and Survivor
+// escapes. The database only keeps a player's best. Without a name the form asks for one.
 function setupPostForm(r) {
   const form = $('post-form');
-  const eligible = r.campaign === 'keeper' && !r.loadout.eventId && r.score > 0;
+  const eligible = !r.loadout.eventId && (r.campaign === 'keeper' ? r.score > 0 : r.outcome.result === 'victory');
   form.hidden = !eligible;
   if (!eligible) return;
   form.dataset.done = '';
@@ -962,10 +1066,12 @@ async function sendScore(r, name) {
   form.dataset.sending = '1';
   $('btn-post').disabled = true;
   setPostStatus(`Posting as ${name}\u2026`, 'fine-print');
-  const posted = await submitScore(playerId(), name, {
-    score: r.score, time: r.time, defeated: r.stats.defeated, souls: r.stats.souls, seals: r.stats.seals,
-    health: Math.max(0, r.health), breaches: Math.min(3, r.breaches), result: r.outcome.result,
-  });
+  const hero = r.loadout.heroes[r.campaign];
+  const payload = r.campaign === 'keeper'
+    ? { hero, score: r.score, time: r.time, defeated: r.stats.defeated, souls: r.stats.souls, seals: r.stats.seals,
+        health: Math.max(0, r.health), breaches: Math.min(3, r.breaches), result: r.outcome.result }
+    : { hero, time: r.time, tasks: TASKS.filter((t) => r.done[t.id]).length, result: r.outcome.result };
+  const posted = await submitScore(playerId(), name, payload, fetch, r.campaign);
   if (run !== r) return; // the player has already moved on to another run
   form.dataset.sending = '';
   if (!posted.ok) {
@@ -980,9 +1086,11 @@ async function sendScore(r, name) {
   store.update((d) => { d.player.name = name; });
   $('post-row').hidden = true;
   const you = posted.you;
-  const message = you && you.score > r.score
-    ? `Your best of ${you.score.toLocaleString()} stands at #${you.rank}.`
-    : `Posted as ${name}. You're #${you.rank} on the leaderboard.`;
+  const better = r.campaign === 'keeper' ? you && you.score > r.score : you && you.time < r.time - 0.005;
+  const best = r.campaign === 'keeper' ? you?.score.toLocaleString() : formatTime(you?.time ?? 0);
+  const message = better
+    ? `Your best of ${best} stands at #${you.rank}.`
+    : `Posted as ${name}. You're #${you.rank} on the ${r.campaign === 'keeper' ? 'Cemetery Keeper' : 'Last Survivor'} leaderboard.`;
   setPostStatus(`\u2713 ${message}`, 'saved-line');
   announce(message);
 }
@@ -1061,7 +1169,14 @@ function tick(now) {
 
 function drawWorld() {
   renderer.draw(run, { time: animTime, reducedMotion: reducedMotion(), insets: viewInsets() });
+  minimap.draw(run, animTime);
 }
+
+// The radar in the HUD corner; tap it (or press M) to open the whole map.
+const minimap = createMinimap($('minimap'), $('minimap-canvas'));
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM' && state === 'playing' && !e.repeat) { e.preventDefault(); minimap.toggle(); }
+});
 
 const landscape = matchMedia('(orientation: landscape)');
 // The HUD and touch controls float over the canvas; the camera keeps the player between them.

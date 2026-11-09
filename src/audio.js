@@ -118,6 +118,7 @@ export const sfx = {
   defeat() { [392, 349, 311, 262].forEach((f, i) => tone({ freq: f, type: 'triangle', dur: 0.45, vol: 0.22, delay: i * 0.18 })); },
   pulse() { tone({ freq: 140, type: 'sine', dur: 0.4, vol: 0.4, slide: 260 }); noise({ dur: 0.3, vol: 0.2, filter: 700, sweep: 1500 }); },
   rattle() { [0, 0.07, 0.14, 0.21].forEach((d) => noise({ dur: 0.05, vol: 0.3, filter: 2400, q: 4, delay: d })); },
+  gunshot() { noise({ dur: 0.22, vol: 0.6, filter: 1400, sweep: 300, q: 1 }); tone({ freq: 120, type: 'square', dur: 0.12, vol: 0.2, slide: -80 }); },
   // The monsters.
   shriek() { noise({ dur: 0.9, vol: 0.32, filter: 1800, sweep: 4200, q: 8 }); tone({ freq: 880, type: 'sawtooth', dur: 0.8, vol: 0.06, slide: 500 }); },
   scuttle() { [0, 0.05, 0.1, 0.15, 0.2, 0.25].forEach((d) => noise({ dur: 0.03, vol: 0.18, filter: 3200, q: 6, delay: d })); },

@@ -14,12 +14,12 @@ const pipSkin = (id) => ({
   reaperHead: cos(`${id}-head`), reaperBody: cos(`${id}-body`),
   reaperArmBack: cos(`${id}-arm-back`), reaperArmFront: cos(`${id}-arm-front`),
   reaperSideHead: cos(`${id}-side-head`), reaperSideBody: cos(`${id}-side-body`), reaperSideArm: cos(`${id}-side-arm`),
-  reaperBackHead: cos(`${id}-back-head`), reaperBackBody: cos(`${id}-back-body`), reaperBackArm: cos(`${id}-back-arm`),
+  reaperBackHead: cos(`${id}-back-head`), reaperBackBody: cos(`${id}-back-body`), reaperBackArm: cos(`${id}-back-arm`), reaperBackArmL: cos(`${id}-back-arm-l`),
 });
 const maraSkin = (id) => ({
   maraBody: cos(`${id}-body`), maraArmBack: cos(`${id}-arm-back`), maraArmFront: cos(`${id}-arm-front`),
   maraSideBody: cos(`${id}-side-body`), maraSideArm: cos(`${id}-side-arm`), maraSideArmFront: cos(`${id}-side-arm-front`),
-  maraBackBody: cos(`${id}-back-body`), maraBackArm: cos(`${id}-back-arm`),
+  maraBackBody: cos(`${id}-back-body`), maraBackArm: cos(`${id}-back-arm`), maraBackArmL: cos(`${id}-back-arm-l`),
 });
 
 export const COSMETICS = [
@@ -35,6 +35,53 @@ export const COSMETICS = [
   { id: 'mara-violet', name: 'Violet Runner', appliesTo: 'Mara appearance', campaign: 'survivor', slot: 'appearance', cost: 180, skin: maraSkin('mara-violet'), desc: 'Night-violet jacket, built for fast routes.' },
 ];
 
+// ---------------- Heroes ----------------
+// Each story has four heroes. The first is free; the others are bought with Grave Coins. A hero
+// is drawn on the story's rig with its own art (`skin`) and plays with its own `perks`.
+const hero = (name) => `assets/img/v2/hero/${name}.png`;
+const REAPER_PARTS = {
+  reaperHead: 'head', reaperBody: 'body', reaperArmBack: 'arm-back', reaperArmFront: 'arm-front',
+  reaperScythe: 'scythe', reaperLantern: 'lantern',
+  reaperSideHead: 'side-head', reaperSideBody: 'side-body', reaperSideArm: 'side-arm',
+  reaperBackHead: 'back-head', reaperBackBody: 'back-body', reaperBackArm: 'back-arm', reaperBackArmL: 'back-arm-l',
+};
+const MARA_PARTS = {
+  maraHead: 'head', maraBody: 'body', maraArmBack: 'arm-back', maraArmFront: 'arm-front', maraLeg: 'leg',
+  maraSideHead: 'side-head', maraSideBody: 'side-body', maraSideArm: 'side-arm', maraSideArmFront: 'side-arm-front',
+  maraSideThigh: 'side-thigh', maraSideShin: 'side-shin', maraSideFoot: 'side-foot',
+  maraSideThighFar: 'side-thigh-far', maraSideShinFar: 'side-shin-far', maraSideFootFar: 'side-foot-far',
+  maraBackHead: 'back-head', maraBackBody: 'back-body', maraBackArm: 'back-arm', maraBackLeg: 'back-leg',
+  maraLegL: 'leg-l', maraBackArmL: 'back-arm-l', maraBackLegL: 'back-leg-l',
+};
+const heroSkin = (id, parts) => Object.fromEntries(Object.entries(parts).map(([key, part]) => [key, hero(`${id}-${part}`)]));
+
+export const HEROES = [
+  { id: 'pip', campaign: 'keeper', name: 'Pip', title: 'The Night Keeper', cost: 0, skin: {}, perks: {},
+    desc: 'The cemetery’s keeper. Three hearts, a trusty scythe and a steady Soul Pulse.' },
+  { id: 'pip-white', campaign: 'keeper', name: 'Pip the White', title: 'Keeper of First Light', cost: 400,
+    skin: { ...pipSkin('pip-white'), reaperScythe: cos('scythe-white') }, perks: { maxHealth: 4 },
+    desc: 'Pip in pale robes and a silver scythe. Four hearts instead of three.' },
+  { id: 'monk', campaign: 'keeper', name: 'The Hollow Monk', title: 'Silent Brother', cost: 900,
+    rig: 'monk', skin: heroSkin('monk', REAPER_PARTS), perks: { slashArc: 1.35, slashCooldown: 0.75, pulseCooldown: 0.75 },
+    desc: 'A swift, wide slash and a Soul Pulse that recovers sooner.' },
+  { id: 'bone-king', campaign: 'keeper', name: 'The Bone King', title: 'Lord of the Ossuary', cost: 1800,
+    rig: 'boneKing', skin: heroSkin('bone-king', REAPER_PARTS), perks: { slashRange: 1.3, pulseWounds: true },
+    desc: 'A long reach, and his Soul Pulse wounds what it throws back.' },
+  { id: 'mara', campaign: 'survivor', name: 'Mara', title: 'The Courier', cost: 0, skin: {}, perks: {},
+    desc: 'Quick, quiet and armed with a knife.' },
+  { id: 'theo', campaign: 'survivor', name: 'Theo', title: 'The Medic', cost: 400,
+    rig: 'theo', skin: heroSkin('theo', MARA_PARTS), perks: { secondWind: 1 },
+    desc: 'Patches himself up once: the first zombie that catches him only knocks him back.' },
+  { id: 'kate', campaign: 'survivor', name: 'Kate Ironside', title: 'The Scavenger', cost: 900,
+    rig: 'kate', skin: heroSkin('kate', MARA_PARTS), perks: { blade: 2, rounds: 6, pistolLevel: 1 },
+    desc: 'Starts with a sharpened knife and a pistol with six rounds.' },
+  { id: 'reyes', campaign: 'survivor', name: 'Sergeant Reyes', title: 'The Soldier', cost: 1800,
+    rig: 'reyes', skin: heroSkin('reyes', MARA_PARTS), perks: { rounds: 10, pistolLevel: 2, speed: 1.12 },
+    desc: 'A heavy pistol whose rounds can kill, and a faster run.' },
+];
+export const heroById = (id) => HEROES.find((h) => h.id === id);
+export const defaultHero = (campaign) => HEROES.find((h) => h.campaign === campaign && h.cost === 0);
+
 export const SLOTS = { keeper: ['appearance', 'weapon', 'lantern'], survivor: ['appearance'] };
 export const SLOT_LABELS = { appearance: 'Appearance', weapon: 'Scythe', lantern: 'Lantern' };
 
@@ -44,10 +91,14 @@ export const defaultCosmetic = (campaign, slot) =>
 
 // `values[level]` is the live value; `costs[level]` buys the next level.
 export const UPGRADES = [
-  { id: 'pulseRecovery', name: 'Soul Pulse Recovery', campaign: 'keeper', values: [18, 16, 14], costs: [100, 180], format: (v) => `${v} sec cooldown` },
-  { id: 'soulReach', name: 'Soul Reach', campaign: 'keeper', values: [1, 1.15, 1.3], costs: [80, 150], format: (v) => `×${v.toFixed(2)} collection radius` },
-  { id: 'distractRecovery', name: 'Distraction Recovery', campaign: 'survivor', values: [22, 20, 18], costs: [100, 180], format: (v) => `${v} sec cooldown` },
-  { id: 'lastingRattle', name: 'Lasting Rattle', campaign: 'survivor', values: [3, 3.5, 4], costs: [80, 150], format: (v) => `${v} sec distraction` },
+  { id: 'pulseRecovery', art: 'pulse-recovery', name: 'Soul Pulse Recovery', campaign: 'keeper', values: [18, 16, 14], costs: [100, 180], format: (v) => `${v} sec cooldown` },
+  { id: 'soulReach', art: 'soul-reach', name: 'Soul Reach', campaign: 'keeper', values: [1, 1.15, 1.3], costs: [80, 150], format: (v) => `×${v.toFixed(2)} collection radius` },
+  { id: 'distractRecovery', art: 'distract-recovery', name: 'Distraction Recovery', campaign: 'survivor', values: [22, 20, 18], costs: [100, 180], format: (v) => `${v} sec cooldown` },
+  { id: 'lastingRattle', art: 'lasting-rattle', name: 'Lasting Rattle', campaign: 'survivor', values: [3, 3.5, 4], costs: [80, 150], format: (v) => `${v} sec distraction` },
+  { id: 'blade', art: 'blade', name: "Mara's Blade", campaign: 'survivor', values: [1, 2, 3], costs: [90, 200],
+    format: (v) => ['', 'Knife: 3 sec stun', 'Sharpened knife: 4 sec stun', 'Machete: kills zombies; the worse things take several hits'][v] },
+  { id: 'pistol', art: 'pistol', name: 'Pistol', campaign: 'survivor', values: [0, 6, 10], costs: [150, 240],
+    format: (v) => (v === 0 ? 'Not owned' : v === 6 ? '6 rounds a run, 4 sec stun. Loud!' : 'Heavy pistol: 10 rounds that can kill. Loud!') },
 ];
 export const upgradeById = (id) => UPGRADES.find((u) => u.id === id);
 

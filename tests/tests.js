@@ -1,10 +1,10 @@
 import { createKeeperRun, stepKeeper, KEEPER, specialFor, isWraithSolid, slashHits } from '../src/keeper.js';
-import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, distractionLanding, inBeam, TASKS, PATROLS, SURVIVOR, MONSTERS } from '../src/survivor.js';
+import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, distractionLanding, inBeam, TASKS, PATROLS, SURVIVOR, MONSTERS, WEAPONS } from '../src/survivor.js';
 import { distanceField, isSolid, lineOfSight, moveCircle } from '../src/world.js';
 import { sanitize, createStore, defaultSave } from '../src/storage.js';
-import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS, SKILLS } from '../src/catalog.js';
+import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS, SKILLS, HEROES } from '../src/catalog.js';
 import { cleanName } from '../src/leaderboard-rules.mjs';
-import { RIGS, GAITS, drawRig, facingView, pose, undeadRig } from '../src/rig.js';
+import { RIGS, GAITS, drawRig, facingView, pose, undeadRig, maraCadence, MARA_GAIT } from '../src/rig.js';
 import { createAnimator, createLayerGuard, firstTilePoint, layerIsBlank } from '../src/render-common.js';
 import { fetchBoard, submitScore } from '../src/leaderboard.js';
 import { boardRowsHtml } from '../src/screens.js';
@@ -12,7 +12,7 @@ import { nearestInDirection } from '../src/nav.js';
 import {
   commitRun, runLoadout, buyCosmetic, equipCosmetic, buyUpgrade, achievementStatus, claimAchievement,
   missionStatus, claimMission, claimDaily, dailyStatus, nextResetMs, journalTierStatus, claimJournalTier,
-  hasJournalBadge, claimableCounts,
+  hasJournalBadge, claimableCounts, buyHero, selectHero,
 } from '../src/progress.js';
 
 const results = [];
@@ -303,6 +303,7 @@ function standBeside(run, tile) {
 
 function noZombies(run) { run.zombies = []; return run; }
 const press = { x: 0, y: 0, action: true };
+const strike = { x: 0, y: 0, attack: true };
 
 test('Survivor: tasks cannot be skipped and the refuge stays locked', () => {
   const run = noZombies(createSurvivorRun());
@@ -413,6 +414,15 @@ export function honestBot(run) {
     const st = run.zombies.find((z) => z.kind === 'stalker' && z.state === 'hunt' && !(z.linger > 0));
     if (st && Math.hypot(st.x - run.player.x, st.y - run.player.y) < 3.2 &&
         lineOfSight(run.map, run.player.x, run.player.y, st.x, st.y)) { dx = st.x - run.player.x; dy = st.y - run.player.y; }
+    // Cornered, a player turns to the closest zombie and uses the knife: it stuns, it doesn't kill.
+    const close = run.zombies.filter((z) => z.kind !== 'crawler' && !(z.stun > 0) && z.state !== 'dormant')
+      .find((z) => Math.hypot(z.x - run.player.x, z.y - run.player.y) < WEAPONS.knife.reach);
+    if (close && run.weapon.cooldown === 0) {
+      run.player.fx = close.x - run.player.x; run.player.fy = close.y - run.player.y;
+      const l = Math.hypot(run.player.fx, run.player.fy) || 1; run.player.fx /= l; run.player.fy /= l;
+      stepSurvivor(run, { x: 0, y: 0, attack: true }, DT);
+      continue;
+    }
     const len = Math.hypot(dx, dy);
     const inp = len < 0.05 ? IDLE : { x: dx / len, y: dy / len, action: false };
     void field;
@@ -421,7 +431,7 @@ export function honestBot(run) {
   return run;
 }
 
-test('Survivor: an honest run (keyboard pathing, real zombies) can reach the refuge', () => {
+test('Survivor: an honest run (keyboard pathing, the knife, real zombies) can reach the refuge', () => {
   const run = honestBot(createSurvivorRun());
   if (run.outcome?.result === 'defeat') {
     const z = run.zombies.reduce((a, b) => (Math.hypot(a.x - run.player.x, a.y - run.player.y) < Math.hypot(b.x - run.player.x, b.y - run.player.y) ? a : b));
@@ -547,12 +557,12 @@ test('Crawler: hidden until Mara comes close, then rattles before it lunges', ()
   assert(c.y > at.y + 0.2, 'lunges toward her');
 });
 
-test('Keeper: a brute takes three slashes and shrugs off most of the Soul Pulse', () => {
+test('Keeper: a brute takes several slashes and shrugs off most of the Soul Pulse', () => {
   const run = quiet(createKeeperRun(3));
   run.player.x = 2.5; run.player.y = 15.5; run.player.fx = 1; run.player.fy = 0;
   const e = activeEnemy(run, 3.4, 15.5);
   Object.assign(e, { kind: 'brute', hp: KEEPER.brute.hp, r: KEEPER.brute.r });
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < KEEPER.brute.hp - 1; i++) {
     tick(run, stepKeeper, { x: 0, y: 0, action: true });
     eq(run.stats.defeated, 0, `alive after slash ${i + 1}`);
     e.x = 3.4; e.y = 15.5; e.push = null;
@@ -606,6 +616,165 @@ test('Remote navigation: arrows move to the nearest control in that direction', 
   eq(nearestInDirection(mid, all, [0, 1]), below);
   eq(nearestInDirection(mid, all, [0, -1]), null, 'nothing above');
   eq(nearestInDirection(below, all, [0, -1]), mid, 'straight up beats the corners');
+});
+
+// ---------------- Mara's weapons ----------------
+
+// A walker standing right in front of Mara on open street.
+function facingWalker(loadout = {}) {
+  const run = createSurvivorRun(loadout);
+  const z = run.zombies.find((o) => o.kind === 'walker');
+  run.zombies = [z];
+  run.player.x = 4.5; run.player.y = 8.5; run.player.fx = 1; run.player.fy = 0;
+  z.x = 5.4; z.y = 8.5; z.state = 'patrol';
+  return { run, z };
+}
+
+test('Knife: a stab stuns a zombie in front, which cannot catch her until it recovers', () => {
+  const { run, z } = facingWalker();
+  const ev = stepSurvivor(run, strike, DT);
+  assert(ev.some((e) => e.type === 'stab' && e.hit), 'stabbed');
+  eq(z.state, 'stunned');
+  eq(z.stun > 2.9, true);
+  z.x = run.player.x; z.y = run.player.y; // right on top of her
+  for (let i = 0; i < 60; i++) stepSurvivor(run, IDLE, DT);
+  eq(run.outcome, null, 'a stunned zombie is harmless');
+  for (let i = 0; i < 60 * 3; i++) stepSurvivor(run, IDLE, DT);
+  eq(run.outcome?.result, 'defeat', 'it recovers and catches her');
+});
+
+test('Knife: its own button, separate from using things; stabs have a cooldown', () => {
+  const run = createSurvivorRun();
+  run.zombies = [];
+  const f = run.objects.fuse;
+  run.player.x = f.c + 1.5; run.player.y = f.r + 0.5;
+  let ev = stepSurvivor(run, press, DT);
+  assert(ev.some((e) => e.type === 'task'), 'the hand button took the fuse');
+  assert(!ev.some((e) => e.type === 'stab'), 'the hand button never stabs');
+  ev = stepSurvivor(run, strike, DT);
+  assert(ev.some((e) => e.type === 'stab'), 'the weapon button stabs, even beside something to use');
+  assert(!ev.some((e) => e.type === 'task'), 'the weapon button never uses things');
+  const { run: r2 } = facingWalker();
+  let stabs = 0;
+  for (let i = 0; i < 60; i++) stabs += stepSurvivor(r2, strike, DT).filter((e) => e.type === 'stab').length;
+  eq(stabs, 2, 'stabs in one second'); // t=0, 0.7
+});
+
+test('Pistol: shoots further than the knife, uses a round, and the noise draws others', () => {
+  const run = createSurvivorRun({ rounds: 6, pistolLevel: 1 });
+  const [a, b] = run.zombies.filter((o) => o.kind === 'walker');
+  run.zombies = [a, b];
+  run.player.x = 4.5; run.player.y = 8.5; run.player.fx = 1; run.player.fy = 0;
+  a.x = 8.5; a.y = 8.5; a.state = 'patrol';         // ahead, out of knife reach
+  b.x = 4.5; b.y = 13.5; b.state = 'patrol';        // nearby, can't see her
+  assert(!canSee(run, b));
+  const ev = stepSurvivor(run, strike, DT);
+  assert(ev.some((e) => e.type === 'shot'), 'fired');
+  eq(run.weapon.rounds, 5);
+  eq(a.state, 'stunned');
+  eq(b.state, 'investigate', 'came to look at the gunshot');
+  // No rounds, no shot: the press becomes a knife swing at the air.
+  run.weapon.rounds = 0; run.weapon.cooldown = 0; a.stun = 0; a.state = 'patrol';
+  const ev2 = stepSurvivor(run, strike, DT);
+  assert(!ev2.some((e) => e.type === 'shot'));
+});
+
+test('Weapons: the top upgrades kill, but the worse things take several hits', () => {
+  const { run, z } = facingWalker({ blade: 3 });
+  stepSurvivor(run, strike, DT);
+  assert(!run.zombies.includes(z), 'a machete fells a walker in one');
+  const { run: r2, z: brute } = facingWalker({ blade: 3 });
+  brute.kind = 'brute';
+  let hits = 0;
+  while (r2.zombies.includes(brute) && hits < 10) {
+    brute.stun = 0; r2.weapon.cooldown = 0;
+    stepSurvivor(r2, strike, DT);
+    hits++;
+  }
+  eq(hits, WEAPONS.toughness.brute, 'hits to fell a brute');
+  // Without the top upgrade a brute is only stunned, and more briefly than a walker.
+  const { run: r3, z: b3 } = facingWalker({ blade: 1 });
+  b3.kind = 'brute';
+  stepSurvivor(r3, strike, DT);
+  assert(r3.zombies.includes(b3));
+  eq(b3.stun < WEAPONS.knife.stun[1], true, 'shakes it off faster');
+});
+
+test('Shop: the blade and pistol upgrades reach the run', () => {
+  const save = defaultSave();
+  save.upgradeLevels.blade = 2; save.upgradeLevels.pistol = 1;
+  const l = runLoadout(save).survivor;
+  eq(l.blade, 3); eq(l.rounds, 6); eq(l.pistolLevel, 1);
+  const run = createSurvivorRun(l);
+  eq(run.weapon.blade, 3); eq(run.weapon.rounds, 6);
+  const fresh = runLoadout(defaultSave()).survivor;
+  eq(fresh.blade, 1); eq(fresh.rounds, 0, 'no pistol until it is bought');
+});
+
+// ---------------- Heroes ----------------
+
+test('Heroes: four per story, the first free, the rest bought with coins', () => {
+  for (const c of ['keeper', 'survivor']) {
+    const list = HEROES.filter((h) => h.campaign === c);
+    eq(list.length, 4, `${c} heroes`);
+    eq(list.filter((h) => h.cost === 0).length, 1, `${c} free heroes`);
+  }
+  const save = defaultSave();
+  eq(save.heroes.selected.keeper, 'pip');
+  eq(selectHero(save, 'pip-white').reason, 'locked', 'cannot pick a locked hero');
+  eq(buyHero(save, 'pip-white', 1).reason, 'funds');
+  save.wallet.graveCoins = 500;
+  const r = buyHero(save, 'pip-white', 1);
+  assert(r.ok);
+  eq(save.wallet.graveCoins, 100);
+  eq(save.heroes.selected.keeper, 'pip-white', 'a new hero is picked straight away');
+  eq(buyHero(save, 'pip-white', 1).reason, 'owned');
+  assert(selectHero(save, 'pip').ok);
+  // A save can't claim a hero it never bought.
+  const forged = sanitize({ ...save, heroes: { owned: [], selected: { keeper: 'bone-king', survivor: 'reyes' } } });
+  eq(forged.heroes.selected.keeper, 'pip'); eq(forged.heroes.selected.survivor, 'mara');
+});
+
+test('Heroes: perks reach the run in both stories', () => {
+  const save = defaultSave();
+  save.heroes.owned = ['pip-white', 'monk', 'bone-king', 'theo', 'kate', 'reyes'];
+  save.heroes.selected = { keeper: 'pip-white', survivor: 'kate' };
+  let l = runLoadout(save);
+  eq(createKeeperRun(1, l.keeper).health, 4, 'Pip the White has four hearts');
+  const kate = createSurvivorRun(l.survivor);
+  eq(kate.weapon.rounds, 6); eq(kate.weapon.blade, 2);
+  save.heroes.selected = { keeper: 'monk', survivor: 'reyes' };
+  l = runLoadout(save);
+  const monk = createKeeperRun(1, l.keeper);
+  assert(monk.rules.slashCooldown < KEEPER.slashCooldown && monk.rules.slashHalfAngle > KEEPER.slashHalfAngle);
+  const reyes = createSurvivorRun(l.survivor);
+  assert(reyes.rules.speed > SURVIVOR.playerSpeed); eq(reyes.weapon.pistolLevel, 2);
+  save.heroes.selected.keeper = 'bone-king';
+  const king = createKeeperRun(1, runLoadout(save).keeper);
+  assert(king.rules.slashRange > KEEPER.slashRange && king.rules.pulseWounds);
+});
+
+test('Heroes: Theo shakes off the first catch, but not the second', () => {
+  const run = createSurvivorRun({ secondWind: 1 });
+  const z = run.zombies.find((o) => o.kind === 'walker');
+  run.zombies = [z];
+  z.x = run.player.x; z.y = run.player.y; z.state = 'chase';
+  const ev = stepSurvivor(run, IDLE, DT);
+  assert(ev.some((e) => e.type === 'secondWind'), 'second wind');
+  eq(run.outcome, null);
+  eq(z.state, 'stunned', 'the zombie reels back');
+  for (let i = 0; i < 60 * 4; i++) { stepSurvivor(run, IDLE, DT); if (run.outcome) break; }
+  eq(run.outcome?.result, 'defeat', 'the next catch ends it');
+});
+
+test('Heroes: the Bone King\'s pulse wounds what it throws back', () => {
+  const run = quiet(createKeeperRun(2, { pulseWounds: true }));
+  run.player.x = 2.5; run.player.y = 15.5;
+  const e = activeEnemy(run, 3.3, 15.5);
+  run.skillCooldown = 0;
+  tick(run, stepKeeper, { x: 0, y: 0, skill: true });
+  eq(run.stats.defeated, 1, 'a one-hit undead falls to the pulse');
+  assert(!run.enemies.includes(e));
 });
 
 // ---------------- Storage ----------------
@@ -1179,11 +1348,13 @@ test('Rigs: each view draws its own art, even when two views share part names', 
 
 test('Mara\'s stride: a planted foot moves back about as fast as the ground passes', () => {
   // Rig units per second at her run speed, against the planted foot's speed at the game's animation pace.
-  const unitsPerTile = RIGS.mara.height / 1.6;
-  const ground = SURVIVOR.playerSpeed * unitsPerTile;
-  const cycleSeconds = (Math.PI * 2) / 21;
-  const plantedFoot = (2 * 48) / (0.4 * cycleSeconds);
-  assert(Math.abs(plantedFoot - ground) / ground < 0.1, `foot ${plantedFoot.toFixed(0)} vs ground ${ground.toFixed(0)}`);
+  for (const speed of [SURVIVOR.playerSpeed, SURVIVOR.playerSpeed * 1.12]) {
+    const unitsPerTile = RIGS.mara.height / 1.75;
+    const ground = speed * unitsPerTile;
+    const cycleSeconds = (Math.PI * 2) / maraCadence(speed);
+    const plantedFoot = (2 * MARA_GAIT.stride) / (MARA_GAIT.planted * cycleSeconds);
+    assert(Math.abs(plantedFoot - ground) / ground < 0.02, `foot ${plantedFoot.toFixed(0)} vs ground ${ground.toFixed(0)}`);
+  }
 });
 
 // ---------------- Shared leaderboard ----------------

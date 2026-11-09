@@ -1,7 +1,7 @@
 // Versioned, namespaced local save with migration and an in-memory fallback.
 // Every write re-reads the stored copy first, so a change made elsewhere is never
 // overwritten; main.js also keeps one tab active at a time with a Web Lock.
-import { COSMETICS, UPGRADES, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS, EVENTS, DAILY_TRACK, LIMITS, cosmeticById, defaultCosmetic, SLOTS } from './catalog.js';
+import { COSMETICS, UPGRADES, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS, EVENTS, DAILY_TRACK, LIMITS, cosmeticById, defaultCosmetic, SLOTS, HEROES, heroById, defaultHero } from './catalog.js';
 
 export const SAVE_KEY = 'scythe-night:save';
 export const SAVE_VERSION = 2;
@@ -18,6 +18,7 @@ export function defaultSave() {
       survivor: { appearance: 'mara-default' },
     },
     upgradeLevels: Object.fromEntries(UPGRADES.map((u) => [u.id, 0])),
+    heroes: { owned: [], selected: { keeper: 'pip', survivor: 'mara' } },
     lifetimeStats: { souls: 0, seals: 0, survivorTasks: 0, keeperWins: 0, flawlessWins: 0, survivorWins: 0, countedRuns: 0 },
     claimedAchievementIds: [],
     missionProgress: { souls: 0, seals: 0, tasks: 0 },
@@ -60,6 +61,18 @@ function sanitizeRun(r) {
     upgrades: obj(o.upgrades),
     at: count(o.at),
   };
+}
+
+// Owned heroes are bought ones; a selection must be a hero of that story the player can use.
+function sanitizeHeroes(h) {
+  const owned = knownIds(h.owned, HEROES.filter((x) => x.cost > 0).map((x) => x.id));
+  const selected = {};
+  for (const campaign of ['keeper', 'survivor']) {
+    const pick = heroById(obj(h.selected)[campaign]);
+    const usable = pick && pick.campaign === campaign && (pick.cost === 0 || owned.includes(pick.id));
+    selected[campaign] = usable ? pick.id : defaultHero(campaign).id;
+  }
+  return { owned, selected };
 }
 
 // v1 only had settings, keeperBest, completed flags and tutorial flags.
@@ -110,6 +123,7 @@ export function sanitize(input) {
     ownedCosmeticIds: owned,
     equippedByCampaign: equipped,
     upgradeLevels: Object.fromEntries(UPGRADES.map((u) => [u.id, clampInt(obj(raw.upgradeLevels)[u.id], 0, u.costs.length, 0)])),
+    heroes: sanitizeHeroes(obj(raw.heroes)),
     lifetimeStats: Object.fromEntries(Object.keys(d.lifetimeStats).map((k) => [k, count(stats[k])])),
     claimedAchievementIds: knownIds(raw.claimedAchievementIds, ACHIEVEMENTS.map((a) => a.id)),
     missionProgress: { souls: count(mp.souls), seals: count(mp.seals), tasks: count(mp.tasks) },

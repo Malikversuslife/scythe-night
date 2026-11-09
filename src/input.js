@@ -12,7 +12,7 @@ function capture(el, id) {
   try { el.setPointerCapture(id); } catch { /* pointer no longer active */ }
 }
 
-export function createInput({ joystick, knob, actionBtn, skillBtn, surface, actionKeys, onPause, isActive }) {
+export function createInput({ joystick, knob, actionBtn, skillBtn, weaponBtn, surface, actionKeys, attackKeys, onPause, isActive }) {
   const held = new Set();
   let stick = { x: 0, y: 0 };
   let stickPointer = null;
@@ -20,6 +20,7 @@ export function createInput({ joystick, knob, actionBtn, skillBtn, surface, acti
   let actionQueued = false;
   let actionHeld = false;
   let skillQueued = false;
+  let attackQueued = false;
 
   // ---- Keyboard ----
   window.addEventListener('keydown', (e) => {
@@ -35,6 +36,9 @@ export function createInput({ joystick, knob, actionBtn, skillBtn, surface, acti
     } else if (e.code === 'KeyK') {
       e.preventDefault();
       if (!e.repeat) skillQueued = true;
+    } else if (attackKeys().includes(e.code)) {
+      e.preventDefault();
+      if (!e.repeat) attackQueued = true;
     } else if (actionKeys().includes(e.code)) {
       e.preventDefault();
       if (!e.repeat) actionQueued = true;
@@ -103,6 +107,16 @@ export function createInput({ joystick, knob, actionBtn, skillBtn, surface, acti
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) skillBtn.addEventListener(ev, () => skillBtn.classList.remove('pressed'));
   skillBtn.addEventListener('click', (e) => { if (e.detail === 0 && isActive()) skillQueued = true; });
 
+  // ---- Weapon button (Last Survivor) ----
+  weaponBtn.addEventListener('pointerdown', (e) => {
+    if (!isActive()) return;
+    e.preventDefault();
+    weaponBtn.classList.add('pressed');
+    attackQueued = true;
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) weaponBtn.addEventListener(ev, () => weaponBtn.classList.remove('pressed'));
+  weaponBtn.addEventListener('click', (e) => { if (e.detail === 0 && isActive()) attackQueued = true; });
+
   // Joystick + action at once is two fingers, which mobile browsers read as a pinch,
   // and fast taps read as double-tap zoom. Cancel the browser's own touch handling over
   // the play area and controls (pointer events still arrive); HUD buttons keep theirs.
@@ -121,10 +135,11 @@ export function createInput({ joystick, knob, actionBtn, skillBtn, surface, acti
       for (const code of held) { x += MOVE_KEYS[code][0]; y += MOVE_KEYS[code][1]; }
       const len = Math.hypot(x, y);
       if (len > 1) { x /= len; y /= len; }
-      const action = actionQueued, skill = skillQueued;
+      const action = actionQueued, skill = skillQueued, attack = attackQueued;
       actionQueued = false;
       skillQueued = false;
-      return { x, y, action, actionHeld, skill };
+      attackQueued = false;
+      return { x, y, action, actionHeld, skill, attack };
     },
     clear() {
       held.clear();
@@ -132,7 +147,9 @@ export function createInput({ joystick, knob, actionBtn, skillBtn, surface, acti
       releaseAction();
       actionQueued = false;
       skillQueued = false;
+      attackQueued = false;
       skillBtn.classList.remove('pressed');
+      weaponBtn.classList.remove('pressed');
     },
   };
 }

@@ -22,8 +22,14 @@ async function call(fn, args, fetchFn) {
   }
 }
 
-export const fetchBoard = (playerId, fetchFn = fetch) =>
-  call('get_leaderboard', { p_player: playerId }, fetchFn);
+// Each story has its own board: Cemetery Keeper by score, Last Survivor by fastest escape.
+const FN = {
+  keeper: { get: 'get_leaderboard', post: 'submit_score' },
+  survivor: { get: 'get_survivor_leaderboard', post: 'submit_survivor_score' },
+};
 
-export const submitScore = (playerId, name, run, fetchFn = fetch) =>
-  call('submit_score', { p_player: playerId, p_name: name, p_run: run }, fetchFn);
+export const fetchBoard = (playerId, fetchFn = fetch, campaign = 'keeper') =>
+  call(FN[campaign].get, { p_player: playerId }, fetchFn);
+
+export const submitScore = (playerId, name, run, fetchFn = fetch, campaign = 'keeper') =>
+  call(FN[campaign].post, { p_player: playerId, p_name: name, p_run: run }, fetchFn);

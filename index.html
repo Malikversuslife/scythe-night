@@ -80,13 +80,13 @@
       </header>
       <h1 id="menu-title" class="menu-logo"><img src="assets/img/title-logo.webp" alt="Scythe Night" draggable="false"></h1>
       <button id="btn-menu-play" class="grave-btn grave-play" type="button">
-        <img src="assets/img/menu/play.png" alt="" draggable="false"><span class="grave-label">Play</span>
+        <img src="assets/img/menu/play.png" alt="" draggable="false"><span class="grave-label" style="--len: 4">Play</span>
       </button>
       <div class="grave-grid">
-        <button class="grave-btn" type="button" data-route="shop"><img src="assets/img/menu/shop.png" alt="" draggable="false"><span class="grave-label">Shop</span></button>
-        <button class="grave-btn" type="button" data-route="characters"><img src="assets/img/menu/characters.png" alt="" draggable="false"><span class="grave-label">Characters</span></button>
-        <button class="grave-btn" type="button" data-route="upgrades"><img src="assets/img/menu/upgrades.png" alt="" draggable="false"><span class="grave-label">Upgrades</span></button>
-        <button id="btn-menu-settings" class="grave-btn" type="button"><img src="assets/img/menu/settings.png" alt="" draggable="false"><span class="grave-label">Settings</span></button>
+        <button class="grave-btn" type="button" data-route="shop"><img src="assets/img/menu/shop.png" alt="" draggable="false"><span class="grave-label" style="--len: 4">Shop</span></button>
+        <button class="grave-btn" type="button" data-route="characters"><img src="assets/img/menu/characters.png" alt="" draggable="false"><span class="grave-label" style="--len: 10">Characters</span></button>
+        <button class="grave-btn" type="button" data-route="upgrades"><img src="assets/img/menu/upgrades.png" alt="" draggable="false"><span class="grave-label" style="--len: 8">Upgrades</span></button>
+        <button id="btn-menu-settings" class="grave-btn" type="button"><img src="assets/img/menu/settings.png" alt="" draggable="false"><span class="grave-label" style="--len: 8">Settings</span></button>
       </div>
       <button class="stone-btn" type="button" data-route="more">
         <img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">More
@@ -147,8 +147,19 @@
     <section id="screen-intro" class="screen screen-intro bg-cemetery" aria-labelledby="intro-title" hidden>
       <div class="stone-panel intro-panel">
         <div class="intro-col intro-lead">
-        <canvas id="intro-preview" class="intro-preview" aria-hidden="true"></canvas>
         <h1 id="intro-title" class="display-title"></h1>
+        <canvas id="intro-preview" class="intro-preview" aria-hidden="true"></canvas>
+        <div class="hero-picker" role="group" aria-label="Choose your hero">
+          <button id="btn-hero-prev" class="round-btn hero-arrow" type="button" aria-label="Previous hero"><img src="assets/img/ui/icon-back.png" alt=""></button>
+          <div class="hero-info" aria-live="polite">
+            <strong id="hero-name"></strong>
+            <span id="hero-title"></span>
+            <span id="hero-count" class="hero-count"></span>
+          </div>
+          <button id="btn-hero-next" class="round-btn hero-arrow next" type="button" aria-label="Next hero"><img src="assets/img/ui/icon-back.png" alt=""></button>
+        </div>
+        <p id="hero-desc" class="hero-desc"></p>
+        <div id="hero-status" class="hero-status"></div>
         <p id="intro-story" class="intro-story"></p>
         </div>
         <div class="intro-col">
@@ -179,6 +190,9 @@
             </button>
           </div>
           <div class="hud-stats" id="hud-stats"></div>
+          <button id="minimap" class="minimap" type="button" aria-label="Open the map (M)" aria-expanded="false">
+            <canvas id="minimap-canvas" aria-hidden="true"></canvas>
+          </button>
         </div>
       </header>
       <div class="hud-sub" id="hud-sub" aria-hidden="true"></div>
@@ -199,6 +213,12 @@
             <span class="skill-cd" id="skill-cd" aria-hidden="true" hidden></span>
           </button>
           <span class="action-label" id="skill-label"></span>
+        </div>
+        <div class="action-wrap weapon-wrap" id="weapon-wrap" hidden>
+          <button id="btn-weapon" class="action-btn" type="button" aria-label="Knife (Space or J)">
+            <span class="action-icon" id="weapon-icon" aria-hidden="true"></span>
+          </button>
+          <span class="action-label" id="weapon-label">Knife</span>
         </div>
         <div class="action-wrap">
           <button id="btn-action" class="action-btn" type="button">
@@ -250,17 +270,13 @@
     <div id="overlay-pause" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
       <div class="stone-panel overlay-panel">
         <h2 id="pause-title" class="display-title">Paused</h2>
-        <div class="pause-grid">
-        <div class="menu-stack">
-          <button id="btn-resume" class="stone-btn primary" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Resume</button>
+        <div class="pause-menu">
+          <button id="btn-resume" class="stone-btn primary pause-wide" type="button"><img class="btn-icon" src="assets/img/ui/icon-play.png" alt="">Resume</button>
           <button id="btn-restart" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-restart.png" alt="">Restart</button>
           <button id="btn-pause-controls" class="stone-btn" type="button">Controls</button>
           <button id="btn-pause-settings" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-gear.png" alt="">Settings</button>
-          <button id="btn-pause-select" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">Story select</button>
-        </div>
-        <button id="btn-pause-quit" class="grave-btn pause-quit" type="button" aria-label="Quit to main menu">
-          <img src="assets/img/menu/quit.png" alt="" draggable="false"><span class="pause-quit-label">Main menu</span>
-        </button>
+          <button id="btn-pause-select" class="stone-btn" type="button"><img class="btn-icon" src="assets/img/ui/icon-menu.png" alt="">Stories</button>
+          <button id="btn-pause-quit" class="stone-btn pause-wide pause-quit" type="button"><img class="btn-icon" src="assets/img/ui/icon-back.png" alt="">Main menu</button>
         </div>
       </div>
     </div>

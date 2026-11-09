@@ -227,7 +227,7 @@ button { font: inherit; }
   text-shadow: 0 0 10px rgba(178, 232, 112, .45), var(--ink-outline);
 }
 .banner-btn:active .banner-text { transform: translateY(3px); }
-.select-banner .banner-text { font-size: 18px; padding: 10px 18px; text-align: center; }
+.select-banner .banner-text { font-size: 18px; padding: 10px 18px; text-align: center; white-space: nowrap; }
 
 /* ---------- Splash ---------- */
 
@@ -318,7 +318,15 @@ button { font: inherit; }
   padding-bottom: 12px;
 }
 
-.story-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* Each story is one stone panel: its card on top, what it's about underneath. */
+.story-col {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0;
+  padding: 12px 12px 14px;
+  border: 5px solid transparent;
+  border-radius: 18px;
+  background: var(--board-bg);
+  box-shadow: var(--stone-edge), 0 8px 18px rgba(0, 0, 0, .55);
+}
 
 .story-card {
   position: relative;
@@ -352,10 +360,8 @@ button { font: inherit; }
 .card-caption {
   width: 100%;
   margin: 0;
-  padding: 0 2px;
-  border: 20px solid transparent;
-  background: var(--board-bg); border-radius: 26px; box-shadow: var(--stone-edge);
-  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .5));
+  padding: 0 4px;
+  text-align: center;
   font-size: 13px;
   line-height: 1.35;
   color: var(--text);
@@ -391,11 +397,14 @@ button { font: inherit; }
 .intro-panel { margin: auto 0; }
 .screen-intro { padding-top: calc(48px + var(--safe-t)); }
 
+/* The hero stands tall while you choose: a real look at who you'll play. */
 .intro-preview {
   display: block;
-  width: 130px;
-  height: 120px;
-  margin: -8px auto 4px;
+  width: 220px;
+  height: 260px;
+  margin: 0 auto 4px;
+  cursor: grab;
+  touch-action: pan-y;
 }
 
 .intro-story { line-height: 1.5; margin: 0; color: var(--text); }
@@ -466,6 +475,34 @@ button { font: inherit; }
 .hud-buttons { display: flex; gap: 8px; }
 .hud-buttons .round-btn { width: 50px; height: 50px; }
 .hud-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* ---------- Minimap: a radar under the timer; tapped, it opens into the whole map ---------- */
+.minimap {
+  position: relative;
+  width: 108px; height: 108px;
+  padding: 0;
+  border: 3px solid #5d6168;
+  border-radius: 50%;
+  background: #0c0e12;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .6), 0 4px 10px rgba(0, 0, 0, .55), inset 0 0 14px rgba(186, 244, 90, .18);
+  overflow: hidden;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: border-radius .2s;
+}
+.minimap canvas { display: block; width: 100%; height: 100%; }
+.minimap:focus-visible { outline: 3px solid var(--soul); outline-offset: 2px; }
+.minimap.open {
+  position: fixed;
+  z-index: 30;
+  left: 50%; top: 50%;
+  width: min(88vw, 70vh); height: min(88vw, 70vh);
+  transform: translate(-50%, -50%);
+  border-radius: 14px;
+  border-color: #7a7f86;
+  box-shadow: 0 0 0 9999px rgba(4, 5, 8, .55), 0 10px 30px rgba(0, 0, 0, .7);
+}
+@media (orientation: landscape) and (max-height: 520px) { .minimap { width: 84px; height: 84px; } }
 .hud-row { display: flex; align-items: center; gap: 6px; }
 
 .score-panel {
@@ -634,6 +671,12 @@ button { font: inherit; }
 }
 
 .controls .joystick, .controls .action-wrap, .controls .skill-btn { pointer-events: auto; }
+/* Last Survivor has two main buttons: the weapon, and the hand for using things beside it. */
+.weapon-wrap { margin-right: 10px; }
+/* Sideways, the skill, the weapon and the hand sit together under the right thumb. */
+@media (orientation: landscape) { .screen-game .controls .weapon-wrap:not([hidden]) { margin-left: 0; } }
+.weapon-wrap[hidden] { display: none; }
+.screen-game .controls .weapon-wrap:not([hidden]) ~ .action-wrap .action-btn { width: 70px; height: 70px; }
 
 .joystick {
   position: relative;
@@ -858,21 +901,33 @@ button { font: inherit; }
 .grave-btn:hover { filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .5)) drop-shadow(0 0 6px rgba(186, 244, 90, .55)); }
 .grave-btn:active { transform: translateY(3px); filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .5)) brightness(.92); }
 .grave-btn:disabled { filter: grayscale(.8) brightness(.7); cursor: not-allowed; }
-/* The tombstones carry only an icon; their names are real text on the empty lower face. */
+/* The tombstones carry only an icon; their names are real text, raised from the smooth panel on
+   the lower face like letters left standing when the stone around them was cut back. */
 .grave-label, .plaque-label {
   position: absolute;
-  left: 8%; right: 8%; top: 58%;
+  left: 17%; right: 17%; top: 55%; height: 22%;
+  display: flex; align-items: center; justify-content: center;
   text-align: center;
-  line-height: 1.02;
+  white-space: nowrap;
+  line-height: 1;
   font-family: var(--font-chunky);
-  font-size: 11.5cqw;
-  letter-spacing: .02em;
+  font-weight: 700;
+  font-size: max(9px, 8.6cqw);
+  letter-spacing: .04em;
   text-transform: uppercase;
-  color: var(--text);
-  text-shadow: var(--ink-outline);
+  color: transparent;
+  background: linear-gradient(180deg, #f1efe7 0%, #c2c0b8 55%, #8e8f8a 100%);
+  -webkit-background-clip: text; background-clip: text;
+  /* Lit from above: a bright top edge and a dark shadow below make the letters stand proud. */
+  filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, .28)) drop-shadow(0 1.5px 0 rgba(0, 0, 0, .9)) drop-shadow(0 2px 3px rgba(0, 0, 0, .6));
   pointer-events: none;
 }
-.grave-play .grave-label { top: 40%; font-size: 21cqw; color: var(--soul); }
+.grave-play .grave-label {
+  left: 18%; right: 18%; top: 37%; height: 30%;
+  font-size: 17cqw; font-weight: 900;
+  background-image: linear-gradient(180deg, #e8ffc0 0%, #b2e870 50%, #6fa83a 100%);
+  filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, .35)) drop-shadow(0 2px 0 rgba(0, 0, 0, .9)) drop-shadow(0 0 8px rgba(178, 232, 112, .45));
+}
 
 /* If the art can't load, the label appears on plain stone. */
 .grave-btn.no-art { min-height: 58px; border: 3px solid var(--ink); border-radius: 12px; background: var(--stone-mid); }
@@ -986,7 +1041,17 @@ button { font: inherit; }
 button.stone-card { width: 100%; font: inherit; cursor: pointer; touch-action: manipulation; }
 button.stone-card:hover { filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .5)) brightness(1.12); }
 button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .5)); }
-.upgrade, .event { flex-direction: column; gap: 2px; }
+.event { flex-direction: column; gap: 2px; }
+/* Upgrade cards: the item's picture beside what it does. */
+.upgrade { flex-direction: row; align-items: center; gap: 14px; }
+.upgrade-art {
+  width: 92px; height: 92px; flex-shrink: 0; object-fit: contain;
+  border-radius: 14px; padding: 6px;
+  background: radial-gradient(circle at 50% 45%, rgba(186, 244, 90, .16), rgba(0, 0, 0, .35) 70%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 2px 8px rgba(0, 0, 0, .6);
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
+}
+.upgrade-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .event .stone-btn, .event .rule-list { margin: 6px 0; }
 .row-end { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
 .done-line, .saved-line { color: var(--soul); font-weight: 800; margin: 2px 0; }
@@ -1004,6 +1069,47 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 .char-head p { margin: 2px 0; }
 .char-name { margin: 0; font-family: var(--font-chunky); font-weight: 400; font-size: 26px; color: var(--amber); text-shadow: var(--ink-outline); }
 .char-preview { width: 130px; height: 150px; flex-shrink: 0; }
+
+/* ---------- Characters page ---------- */
+.hero-roster { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.hero-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 8px 12px; border: 3px solid #4a4f56; border-radius: 18px;
+  background: radial-gradient(circle at 50% 70%, rgba(186, 244, 90, .1), rgba(10, 12, 16, .92) 70%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .7), 0 4px 0 rgba(0, 0, 0, .5);
+  color: var(--text); font: inherit; cursor: pointer; touch-action: manipulation; min-width: 0;
+}
+.hero-card:hover { filter: brightness(1.12); }
+.hero-card.shown { border-color: var(--soul); box-shadow: inset 0 2px 6px rgba(0, 0, 0, .7), 0 0 0 2px rgba(186, 244, 90, .35), 0 4px 0 rgba(0, 0, 0, .5); }
+.hero-card.is-locked .hero-portrait { filter: brightness(.4) grayscale(.6); }
+.hero-card strong { font-family: var(--font-chunky); font-weight: 400; font-size: 16px; text-align: center; line-height: 1.15; }
+.hero-portrait { width: 100%; height: 150px; }
+.hero-tag { font-size: 12px; color: var(--text-dim); display: inline-flex; align-items: center; gap: 4px; }
+.hero-tag.on { color: var(--soul); font-weight: 700; }
+.hero-show { align-items: stretch; gap: 18px; }
+.hero-stage { width: 240px; height: 300px; flex-shrink: 0; border-radius: 16px;
+  background: radial-gradient(circle at 50% 80%, rgba(186, 244, 90, .1), rgba(0, 0, 0, .35) 70%); }
+.hero-about { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.hero-about .char-name { margin: 0; }
+.hero-sub { margin: 0; color: var(--amber); font-weight: 700; }
+.hero-stats { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hero-stats li { display: grid; grid-template-columns: 64px auto 1fr; align-items: center; gap: 10px; font-size: 14px; }
+.hero-stats li > span:first-child { font-family: var(--font-chunky); }
+.hero-stats small { color: var(--text-dim); font-size: 13px; }
+.pips { display: inline-flex; gap: 3px; }
+.pips i { width: 14px; height: 8px; border-radius: 3px; background: rgba(255, 255, 255, .12); }
+.pips i.on { background: var(--soul); box-shadow: 0 0 6px rgba(186, 244, 90, .5); }
+.look-heading { margin: 4px 2px 0; font-family: var(--font-chunky); font-weight: 400; font-size: 16px; color: var(--amber); letter-spacing: .04em; }
+.look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 8px; }
+.look-grid .option { margin-bottom: 0; flex-wrap: wrap; }
+.look-grid .option > .stone-btn { flex: 1 0 100%; margin-top: 6px; }
+.option.look .option-main { display: flex; align-items: center; gap: 12px; }
+.option.look .thumb { width: 64px; height: 84px; }
+@media (max-width: 640px) {
+  .hero-roster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-show { flex-direction: column; align-items: center; }
+  .hero-stage { width: 100%; max-width: 280px; }
+}
 .option { display: flex; align-items: center; gap: 8px; padding: 0 2px; margin-bottom: 6px; border: 20px solid transparent;
   background: var(--board-bg); border-radius: 26px; box-shadow: var(--stone-edge);
   filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .5)); }
@@ -1045,11 +1151,11 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 .item-desc { margin: 4px 0; line-height: 1.4; }
 .item-status { margin: 4px 0; font-weight: 800; line-height: 1.4; }
 
-.pause-grid { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 10px; align-items: center; }
-.pause-quit { container-type: normal; }
-.pause-quit-label { display: block; margin-top: 4px; text-align: center; font-family: var(--font-chunky); font-size: 13px; line-height: 1.1; text-shadow: var(--ink-outline); }
-.pause-grid .stone-btn { width: 100%; font-size: 18px; }
-.pause-grid .menu-stack { gap: 8px; margin-top: 0; }
+/* Pause: Resume on its own row, four options in two pairs, and Main menu set apart at the bottom. */
+.pause-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: min(100%, 420px); margin: 4px auto 0; }
+.pause-menu .stone-btn { width: 100%; font-size: 17px; }
+.pause-wide { grid-column: 1 / -1; }
+.pause-quit { margin-top: 8px; }
 
 .overlay-tab { z-index: 40; background: rgba(9, 9, 10, .92); }
 
@@ -1169,9 +1275,6 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 }
 
 @media (max-width: 380px) {
-  /* Too narrow for two columns: the coffin moves under the button stack. */
-  .pause-grid { grid-template-columns: minmax(0, 1fr); }
-  .pause-quit { width: 76px; margin: 0 auto; }
   .option { flex-wrap: wrap; }
   .option .stone-btn { width: 100%; }
 }
@@ -1191,6 +1294,20 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 
 @media (orientation: landscape) and (max-height: 520px) {
   :root { --controls-h: 112px; --hud-h: 56px; }
+  /* A short screen: the pause menu goes wide, three buttons to a row, so it all fits. */
+  #overlay-pause .overlay-panel { width: min(100%, 600px); }
+  .pause-menu { grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 8px; }
+  .pause-menu .stone-btn { font-size: 15px; padding-top: 9px; padding-bottom: 9px; }
+  .pause-quit { margin-top: 0; grid-column: span 2; }
+  /* The menu stones get the room: bigger stones, a slimmer More button. */
+  .app .grave-grid { width: calc(min(30vw, 62vh) / var(--z)); gap: 4px 10px; }
+  .app .screen-menu { grid-template-rows: auto 1fr auto auto; grid-template-areas: "top top top" "logo play grid" "more play grid" "note note note"; }
+  .app .screen-menu > .stone-btn { width: min(100%, 220px); font-size: 16px; align-self: start; }
+  .app .grave-label { left: 12%; right: 12%; letter-spacing: .02em; }
+  .app .story-card { width: min(100%, calc(32vh / var(--z))); }
+  .app .story-col { padding: 8px 10px 10px; gap: 6px; }
+  .app .card-caption { font-size: 12px; line-height: 1.3; }
+  .app .select-banner .banner-text { font-size: 15px; padding: 7px 16px; }
   .joystick { width: 96px; height: 96px; }
   .joystick-knob { width: 52px; height: 52px; margin: -26px 0 0 -26px; }
   .action-btn { width: 68px; height: 68px; }
@@ -1205,6 +1322,23 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 /* ---------- Landscape: the game's home layout on TVs, desktops and phones held sideways ---------- */
 
 .intro-col { display: contents; }
+
+/* Hero picker: arrows either side of the hero's name, like a game's character select. */
+.board-hero { display: block; font-size: 11px; color: var(--text-dim); font-weight: 400; letter-spacing: .02em; }
+.hero-picker { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px 0 2px; }
+.hero-arrow { width: 44px; height: 44px; flex-shrink: 0; }
+.hero-arrow.next img { transform: scaleX(-1); }
+.hero-info { display: flex; flex-direction: column; align-items: center; min-width: 0; text-align: center; }
+.hero-info strong { font-family: var(--font-display); font-weight: 900; font-size: 20px; color: var(--soul); text-shadow: var(--ink-outline); }
+.hero-info span { font-size: 13px; color: var(--text-dim); }
+.hero-count { font-size: 11px !important; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+.hero-desc { margin: 4px 0 6px; text-align: center; font-size: 14px; line-height: 1.35; }
+.hero-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; min-height: 36px; }
+.hero-ready { color: var(--soul); font-weight: 700; }
+.hero-locked { font-weight: 700; color: var(--amber); }
+.hero-need { width: 100%; text-align: center; font-size: 12px; color: var(--text-dim); }
+.hero-is-locked .intro-preview { filter: brightness(.35) grayscale(.6); }
+#btn-intro-start:disabled { filter: grayscale(.9) brightness(.7); cursor: not-allowed; }
 .results-scroll { display: contents; }
 .rotate-hint { display: none; }
 
@@ -1243,12 +1377,11 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
   .menu-note { grid-area: note; }
 
   /* Story select: the two stories side by side, sized to the screen height. */
-  .select-banner { width: calc(min(40vw, 46vh) / var(--z)); margin: 0 auto calc(1vh / var(--z)); }
+  .select-banner { width: auto; margin: 0 auto calc(1vh / var(--z)); }
   .card-list { width: min(100%, 980px); margin: 0 auto; gap: 3vw; }
-  .story-col { flex-direction: row; align-items: center; gap: 14px; }
   .screen-select { justify-content: center; }
-  .story-card { flex: 0 0 auto; width: min(46%, calc(56vh / var(--z))); }
-  .card-caption { flex: 1; margin: 0; }
+  .card-list { width: min(100%, 860px); }
+  .story-card { width: min(100%, calc(36vh / var(--z))); }
 
   /* How to play: the story on the left, rules and controls on the right. */
   .screen-intro { padding-top: calc(52px + var(--safe-t)); }
@@ -1258,6 +1391,7 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
     width: min(100%, 1000px); height: min(100%, 640px); margin: auto;
   }
   /* Each column scrolls inside the panel, so Back and Start never leave the screen. */
+  .intro-preview { width: 100%; height: calc(min(40vh, 340px) / var(--z)); }
   .intro-col { display: block; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(186, 244, 90, .35) transparent; }
   .intro-col:last-child { display: flex; flex-direction: column; }
   .intro-col .panel-actions { position: sticky; bottom: 0; margin-top: auto; padding-top: 10px; background: linear-gradient(180deg, rgba(66, 72, 81, 0), #424851 35%); }
@@ -1306,4 +1440,46 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
 /* With a mouse and no touchscreen, play is by keyboard: the touch controls step aside. */
 @media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
   .screen-game .controls { display: none; }
+}
+
+/* ---------- Breathing room: text sits well inside every stone frame, never against the rim ---------- */
+.stone-card { padding: 12px 16px; }
+.stone-panel { padding: 14px 14px 12px; }
+.page-intro, .page-body > .fine-print, .page-body > .done-line, .page-body > .warn-line { padding: 10px 14px; }
+.page-note, .badge-line { padding: 8px 12px; }
+.empty { padding: 14px 16px; }
+.option { padding: 10px 14px; }
+.stat { padding: 10px 12px; }
+.run-row { padding: 8px 14px; }
+.day { padding: 6px 4px; }
+.hud-chip, .hud-sub, .wallet { padding-left: 10px; padding-right: 10px; }
+.score-panel, .best-pill { padding-right: 14px; }
+@media (max-width: 360px) { .stone-card { padding: 10px 12px; } }
+
+/* ---------- Gravestone labels fit their stone: long names get smaller letters, never spill ---------- */
+.grave-label { font-size: max(8px, min(8.6cqw, calc(88cqw / var(--len, 8)))); letter-spacing: .03em; }
+.grave-play .grave-label { font-size: 17cqw; }
+
+/* ---------- More: the stones wrap three to a row, sized to the screen ---------- */
+.more-grid {
+  --stone: calc(clamp(104px, min(24vw, 34vh), 190px) / var(--z, 1));
+  display: grid !important;
+  grid-template-columns: repeat(3, var(--stone));
+  justify-content: center;
+  align-items: end;
+  gap: 14px 22px;
+  width: 100%;
+  margin: 8px auto 0;
+}
+.more-grid .grave-btn { width: var(--stone); }
+@media (orientation: landscape) and (max-height: 520px) { .more-grid { --stone: calc(clamp(88px, 26vh, 160px) / var(--z, 1)); gap: 6px 26px; margin-top: 0; } }
+
+/* A phone held sideways: smaller hero portraits and stage, so the roster and showcase fit. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .hero-portrait { height: 96px; }
+  .hero-card { padding: 6px 6px 8px; }
+  .hero-card strong { font-size: 14px; }
+  .hero-stage { width: 180px; height: 220px; }
+  .hero-stats li { grid-template-columns: 58px auto 1fr; font-size: 13px; }
+  .upgrade-art { width: 72px; height: 72px; }
 }
