@@ -398,7 +398,9 @@ export function createKeeperRenderer(images) {
     }
     for (const sc of SCENERY) {
       const img = images[sc.img], h = sc.w * (img.height / img.width);
-      items.push({ y: sc.row + 0.5, box: [sc.x - sc.w / 2, sc.y - h, sc.x + sc.w / 2, sc.y], draw: () => drawImg(ctx, img, sc.x * t, sc.y * t, sc.w * t, { flip: sc.flip }) });
+      // Trees stand on the outer wall but their branches hang over the paths, so they're drawn
+      // behind everyone; the mausoleum sorts normally.
+      items.push({ y: sc.img === 'deadTree' ? -1000 : sc.row + 0.5, box: [sc.x - sc.w / 2, sc.y - h, sc.x + sc.w / 2, sc.y], draw: () => drawImg(ctx, img, sc.x * t, sc.y * t, sc.w * t, { flip: sc.flip }) });
     }
     const g0 = run.gate;
     items.push({ y: g0.r + 0.5, box: [g0.c - 1.1, g0.r - 1.8, g0.c + 2.1, g0.r + 1.1], draw: () => drawImg(ctx, images.ironGate, (g0.c + 0.5) * t, (g0.r + 1.02) * t, 3.1 * t) });

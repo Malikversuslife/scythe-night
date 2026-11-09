@@ -97,7 +97,12 @@ function edgeArrow(env, wx, wy, color, label) {
   const sx = wx * tile - cx, sy = wy * tile - cy;
   const m = 26;
   if (sx >= 0 && sx <= cssW && sy >= top && sy <= bottom) return;
-  const ax = clamp(sx, m, cssW - m), ay = clamp(sy, top + m, bottom - m);
+  const ax = clamp(sx, m, cssW - m);
+  let ay = clamp(sy, top + m, bottom - m);
+  // Keep clear of the HUD panels in the corners (the task box, the timer and minimap).
+  for (const r of env.insets?.avoid || []) {
+    if (ax > r.left - m && ax < r.right + m && ay > r.top - m && ay < r.bottom + m) ay = Math.min(bottom - m, r.bottom + m);
+  }
   const ang = Math.atan2(sy - ay, sx - ax);
   ctx.save();
   ctx.translate(ax, ay);

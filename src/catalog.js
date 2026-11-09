@@ -77,7 +77,7 @@ export const HEROES = [
     desc: 'Starts with a sharpened knife and a pistol with six rounds.' },
   { id: 'reyes', campaign: 'survivor', name: 'Sergeant Reyes', title: 'The Soldier', cost: 1800,
     rig: 'reyes', skin: heroSkin('reyes', MARA_PARTS), perks: { rounds: 10, pistolLevel: 2, speed: 1.12 },
-    desc: 'A heavy pistol whose rounds can kill, and a faster run.' },
+    desc: 'A heavy pistol that hits for two, and a faster run.' },
 ];
 export const heroById = (id) => HEROES.find((h) => h.id === id);
 export const defaultHero = (campaign) => HEROES.find((h) => h.campaign === campaign && h.cost === 0);
@@ -96,9 +96,9 @@ export const UPGRADES = [
   { id: 'distractRecovery', art: 'distract-recovery', name: 'Distraction Recovery', campaign: 'survivor', values: [22, 20, 18], costs: [100, 180], format: (v) => `${v} sec cooldown` },
   { id: 'lastingRattle', art: 'lasting-rattle', name: 'Lasting Rattle', campaign: 'survivor', values: [3, 3.5, 4], costs: [80, 150], format: (v) => `${v} sec distraction` },
   { id: 'blade', art: 'blade', name: "Mara's Blade", campaign: 'survivor', values: [1, 2, 3], costs: [90, 200],
-    format: (v) => ['', 'Knife: 3 sec stun', 'Sharpened knife: 4 sec stun', 'Machete: kills zombies; the worse things take several hits'][v] },
+    format: (v) => ['', 'Knife: fells a zombie in one strike, the worse things in three', 'Sharpened knife: the worse things reel longer between strikes', 'Machete: the worse things fall in two strikes'][v] },
   { id: 'pistol', art: 'pistol', name: 'Pistol', campaign: 'survivor', values: [0, 6, 10], costs: [150, 240],
-    format: (v) => (v === 0 ? 'Not owned' : v === 6 ? '6 rounds a run, 4 sec stun. Loud!' : 'Heavy pistol: 10 rounds that can kill. Loud!') },
+    format: (v) => (v === 0 ? 'Not owned' : v === 6 ? '6 rounds a run; each shot is a strike. Loud!' : 'Heavy pistol: 10 rounds that hit for two. Loud!') },
 ];
 export const upgradeById = (id) => UPGRADES.find((u) => u.id === id);
 

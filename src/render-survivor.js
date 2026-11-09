@@ -1,6 +1,6 @@
 // Last Survivor renderer: a three-quarter view city, built from the map by city.js, with cutout rigs.
 // Buildings, props and characters are drawn back to front by the row they stand on.
-import { SURVIVOR, TASKS, taskIndex, distractionLanding } from './survivor.js';
+import { SURVIVOR, TASKS, taskIndex, distractionLanding, maxHealth } from './survivor.js';
 import { RIGS, GAITS, HUMAN_GAITS, DRAW_SCALE, drawRig, facingView, pose, undeadPose, undeadRig, rigFiles } from './rig.js';
 import {
   INK, clamp, hash, drawImg, shadow, pool, tilePattern, offscreen,
@@ -104,13 +104,15 @@ const CARS = ['taxi', 'sedan', 'car'];
 // measured for figures 1.75 tiles tall; smaller legs take more steps to cover a tile.
 const PERSON = 0.7;
 const SHRINK = PERSON / 1.75;
+// Seconds a felled zombie takes to topple and fade.
+const FALL_TIME = 1.6;
 
 // What stands on a solid 'x' tile, by where it is.
 function propFor(c, r) {
   if (ZONES.parks.some((z) => inZone(z, c, r))) return { img: hash(c, r, 3) < 0.6 ? 'cityTree' : 'cityTreeSmall', w: hash(c, r, 3) < 0.6 ? 1.35 : 0.8 };
   if (ZONES.plazas.some((z) => inZone(z, c, r))) return { img: 'planter', w: 0.95 };
   const n = hash(c, r, 3);
-  if (n < 0.62) return { img: CARS[Math.floor(hash(c, r, 4) * CARS.length)], w: 1.8, flip: hash(c, r, 5) < 0.5 };
+  if (n < 0.62) return { img: CARS[Math.floor(hash(c, r, 4) * CARS.length)], w: 1.35, flip: hash(c, r, 5) < 0.5 };
   return n < 0.82 ? { img: 'dumpster', w: 0.8 } : { img: 'trashBags', w: 0.55 };
 }
 
@@ -180,15 +182,63 @@ export function createSurvivorRenderer(images) {
 
   const TASK_TEXT = { fuse: 'Fuse!', power: 'Power on!', bell: 'DING!' };
 
+  // How each zombie last looked, so it can fall the way it stood; when each was last struck.
+  const lastLook = new Map(), struckAt = new Map();
+  let falls = [];
+
   function event(ev, run) {
+    if (ev.type === 'struck') struckAt.set(ev.id, lastTime);
+    if (ev.type === 'zombieDown') {
+      const look = lastLook.get(ev.id) || { kind: ev.kind === 'walker' ? 'zombie' : ev.kind, view: 'front', flip: false, phase: 0 };
+      falls.push({ ...look, id: ev.id, x: ev.x, y: ev.y, t0: lastTime });
+    }
     if (ev.type === 'shot') { effects.push({ kind: 'shot', ...ev, t: 0, life: 0.18 }); gunUntil = lastTime + 0.7; }
-    if (ev.type === 'zombieDown') effects.push({ kind: 'text', x: ev.x, y: ev.y - 0.9, t: 0, life: 1, text: 'Down!', color: '#ff8a7a', size: 0.42 });
     if (ev.type === 'stunned') effects.push({ kind: 'text', x: ev.x, y: ev.y - 1, t: 0, life: 0.9, text: 'Stunned', color: AMBER, size: 0.34 });
     if (ev.type === 'task' && run) {
       const o = run.objects[ev.id];
       effects.push({ kind: 'text', x: o.c + 0.5, y: o.r - 0.6, t: 0, life: 1.1, text: TASK_TEXT[ev.id], color: AMBER, size: 0.45 });
       if (ev.id === 'bell') bellAt = lastTime;
     }
+  }
+
+  // A zombie's health, floating over its head: green when whole, orange, then red as it's struck,
+  // empty when it falls. The worse things show one notch per strike they can take.
+  function drawHealth(g, x, top, hp, max, sinceHit, t) {
+    const w = t * (max > 1 ? 0.6 : 0.42), h = Math.max(4, t * 0.075), y = top - t * 0.12 - h;
+    const k = Math.max(0, hp / max);
+    g.save();
+    g.fillStyle = 'rgba(8, 6, 10, .78)';
+    g.fillRect(x - w / 2 - 1.5, y - 1.5, w + 3, h + 3);
+    g.fillStyle = k > 0.67 ? '#6fd63c' : k > 0.34 ? '#ff9a2e' : '#ff3b30';
+    g.fillRect(x - w / 2, y, w * k, h);
+    g.fillStyle = 'rgba(255, 255, 255, .22)';
+    g.fillRect(x - w / 2, y, w * k, h * 0.35);
+    if (max > 1) {
+      g.fillStyle = 'rgba(8, 6, 10, .85)';
+      for (let i = 1; i < max; i++) g.fillRect(x - w / 2 + (w * i) / max - 0.75, y, 1.5, h);
+    }
+    if (sinceHit < 0.15) { g.fillStyle = `rgba(255, 255, 255, ${(1 - sinceHit / 0.15) * 0.9})`; g.fillRect(x - w / 2 - 1.5, y - 1.5, w + 3, h + 3); }
+    g.restore();
+  }
+
+  // A felled zombie topples over backwards, lies a moment with its empty bar, then fades.
+  function drawFall(g, f, t, time) {
+    const since = time - f.t0;
+    const k = Math.min(1, since / 0.45), ease = k * k * (3 - 2 * k);
+    const alpha = 1 - Math.max(0, (since - 0.9) / (FALL_TIME - 0.9));
+    const x = f.x * t, foot = (f.y + 0.18) * t, h = PERSON * (DRAW_SCALE[f.kind] || 1) * t;
+    g.save();
+    g.globalAlpha = alpha;
+    g.translate(x, foot);
+    g.rotate(ease * (Math.PI / 2) * (f.flip ? 1 : -1));
+    if (f.kind === 'crawler') {
+      const img = images.crawlerSide;
+      if (img) drawImg(g, img, 0, 0, 1.25 * SHRINK * 1.1 * t);
+    } else {
+      drawRig(g, images, undeadRig(f.kind, f.view), undeadPose(f.t0, f.id, { walk: 0, phase: f.phase }, true), 0, 0, h, { flip: f.view === 'side' && f.flip });
+    }
+    g.restore();
+    if (since < 0.5) { g.save(); g.globalAlpha = 1 - since / 0.5; drawHealth(g, x, foot - h, 0, 1, 9, t); g.restore(); }
   }
 
   function drawEffects(g, t, dt, reduced) {
@@ -336,6 +386,8 @@ export function createSurvivorRenderer(images) {
     const items = [];
     const chasing = run.zombies.some((z) => z.state === 'chase');
     for (const z of run.zombies) items.push({ y: z.y, box: [z.x - 0.9, z.y - 1.2, z.x + 0.9, z.y + 0.5], draw: () => drawZombie(ctx, z, t, time, dt, reduced) });
+    falls = falls.filter((f) => time - f.t0 < FALL_TIME);
+    for (const f of falls) items.push({ y: f.y, box: [f.x - 1, f.y - 1.2, f.x + 1, f.y + 0.5], draw: () => drawFall(ctx, f, t, time) });
     const p = run.player;
     items.push({ y: p.y, box: [p.x - 0.9, p.y - 1, p.x + 0.9, p.y + 0.5], draw: () => drawMara(ctx, run, t, time, dt, reduced, chasing) });
     const { kiosk, power, bell } = { kiosk: run.objects.fuse, power: run.objects.power, bell: run.objects.bell };
@@ -389,21 +441,6 @@ export function createSurvivorRenderer(images) {
     ctx.fill(); ctx.stroke();
 
     drawLights(ctx, run, t, time, reduced, cache.furniture, cx, cy, cssW, cssH);
-    // Sight circles sit above the night overlay: they are gameplay information.
-    for (const z of run.zombies) {
-      // Only things that hunt by sight get a circle; the stalker hunts by sound and a crawler hides.
-      if (z.kind === 'stalker' || z.kind === 'crawler' || z.stun > 0) continue;
-      const alert = z.state === 'chase';
-      ctx.fillStyle = alert ? 'rgba(255, 90, 90, .12)' : 'rgba(255, 120, 120, .05)';
-      ctx.strokeStyle = alert ? 'rgba(255, 138, 138, .75)' : 'rgba(255, 138, 138, .4)';
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash(alert ? [] : [7, 6]);
-      ctx.beginPath();
-      ctx.arc(z.x * t, z.y * t, SURVIVOR.detectRange * t, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
     // Where the noise-maker would land, and where it did.
     if (run.skillCooldown === 0 && !run.outcome) {
       const land = distractionLanding(run);
@@ -520,9 +557,13 @@ export function createSurvivorRenderer(images) {
     if (z.fx < -0.2) s.flip = true;
     else if (z.fx > 0.2) s.flip = false;
     if (z.state === 'dormant') return;
+    lastLook.set(z.id, { kind, view: s.view, flip: s.flip, phase: s.phase });
     const x = z.x * t, foot = (z.y + 0.18) * t, h = PERSON * (DRAW_SCALE[kind] || 1) * t;
     if (z.state !== 'lurk') shadow(g, x, foot - t * 0.02, t * 0.18 * (DRAW_SCALE[kind] || 1));
     drawZombieBody(g, z, t, time, reduced, 1);
+    // A crawler lying in wait shows no bar: it's hidden.
+    if (z.state !== 'lurk') drawHealth(g, x, foot - (kind === 'crawler' ? t * 0.35 : h), z.hp ?? maxHealth(z), maxHealth(z), time - (struckAt.get(z.id) ?? -9), t);
+    const above = z.state !== 'lurk' ? t * 0.16 : 0;
     // Stunned: little stars circle its head until it recovers.
     if (z.stun > 0) {
       g.save();
@@ -530,7 +571,7 @@ export function createSurvivorRenderer(images) {
       for (let i = 0; i < 3; i++) {
         const a = (reduced ? 0 : time * 5) + (i * Math.PI * 2) / 3;
         g.beginPath();
-        g.arc(x + Math.cos(a) * t * 0.16, foot - h - t * 0.04 + Math.sin(a) * t * 0.05, t * 0.035, 0, Math.PI * 2);
+        g.arc(x + Math.cos(a) * t * 0.16, foot - h - above - t * 0.04 + Math.sin(a) * t * 0.05, t * 0.035, 0, Math.PI * 2);
         g.fill();
       }
       g.restore();
@@ -541,16 +582,16 @@ export function createSurvivorRenderer(images) {
       g.textBaseline = 'bottom';
       g.lineWidth = 5;
       g.strokeStyle = INK;
-      g.strokeText(mark, x, foot - h - t * 0.05);
+      g.strokeText(mark, x, foot - h - above - t * 0.05);
       g.fillStyle = z.state === 'chase' ? '#ff8a8a' : AMBER;
-      g.fillText(mark, x, foot - h - t * 0.05);
+      g.fillText(mark, x, foot - h - above - t * 0.05);
       g.textBaseline = 'alphabetic';
     }
   }
 
   return {
     draw, event,
-    reset() { effects = []; cache = null; },
+    reset() { effects = []; falls = []; lastLook.clear(); struckAt.clear(); cache = null; },
     recheck() { guard.soon(); },
     layers,
     setSkin(overrides) { rigImages = { ...images, ...overrides }; },

@@ -45,9 +45,9 @@ const CAMPAIGNS = {
     title: 'Last Survivor',
     story: 'Mara reaches an empty tram stop in Bellwick. The route board points to the dawn refuge, but its gate has no power. A handwritten note is pinned beneath it: “Bring the fuse. Ring the bell. We are still here.”',
     rules: [
-      'One touch from a zombie ends the run. Your <strong>knife</strong> stuns a zombie for a few seconds so you can slip past; the worse things shake it off faster.',
-      'Buy a <strong>pistol</strong> in the shop to stun from range, but every shot is loud and draws the dead to you. Top upgrades can kill.',
-      'Zombies see you inside their red circle if no wall is in the way. Break line of sight and they give up after a few seconds.',
+      'One touch from a zombie ends the run. Your <strong>knife</strong> fells a zombie in one strike; the worse things take three. Watch the bar over their heads.',
+      'Buy a <strong>pistol</strong> to strike from range, but every shot is loud and draws the dead to you. The machete and heavy pistol hit for two.',
+      'Zombies wander the streets. One that sees you up close, with no wall between, gives chase. Break line of sight and it gives up after a few seconds.',
       'Tasks in order: take the <strong>fuse</strong>, install it in the <strong>power box</strong>, ring the <strong>bell</strong>.',
       'Then step through the open <strong>refuge door</strong> to win. The amber ring and edge arrow show where to go.',
       '<strong>Distraction</strong> tosses a noise-maker the way you face. Zombies nearby go to check it, unless they can already see you.',
@@ -606,7 +606,7 @@ function startRun(eventId = null) {
   if (eventId) campaign = eventById(eventId).campaign;
   // Levels and looks are copied here, so nothing bought later can change this run.
   const loadout = runLoadout(store.data, eventId);
-  run = campaign === 'keeper' ? createKeeperRun(Date.now(), loadout.keeper) : createSurvivorRun(loadout.survivor);
+  run = campaign === 'keeper' ? createKeeperRun(Date.now(), loadout.keeper) : createSurvivorRun({ ...loadout.survivor, seed: Date.now() });
   run.id = newRunId();
   run.loadout = loadout;
   hudCache = {};
@@ -867,7 +867,7 @@ function handleEvents(events) {
     renderer.event(ev, run);
     switch (ev.type) {
       case 'slash': audio.sfx.slash(); break;
-      case 'defeat': audio.sfx.hit(); break;
+      case 'defeat': audio.sfx.impact(); break;
       case 'soul': audio.sfx.soul(); break;
       case 'spawn': audio.sfx.warn(); break;
       case 'damage':
@@ -920,7 +920,7 @@ function handleEvents(events) {
       case 'lunge': audio.sfx.lunge(); break;
       case 'smash': audio.sfx.smash(); break;
       case 'hit': audio.sfx.hit(); break;
-      case 'stab': if (ev.hit) audio.sfx.hit(); else audio.sfx.slash(); break;
+      case 'stab': audio.sfx.swish(); if (ev.hit) audio.sfx.impact(); break;
       case 'shot': audio.sfx.gunshot(); announce(`Shot fired. ${ev.rounds} rounds left. The noise will draw them.`); break;
       case 'stunned': announce('Zombie stunned.'); break;
       case 'secondWind': audio.sfx.damage(); flashDamage(); toast('Second wind! Get clear', 1600); announce('Caught, but you shook it off. Run!', true); break;
@@ -1187,7 +1187,12 @@ function viewInsets() {
   // In landscape the touch controls sit in the corners and the camera can use the full height;
   // on desktop they're hidden. Only an upright screen keeps a band free for them.
   const bottom = controls.height && !landscape.matches ? Math.max(0, vp.bottom - controls.top) : 0;
-  return { top: Math.max(0, hud.bottom - vp.top), bottom };
+  // The HUD's corner panels, for edge arrows to steer around.
+  const avoid = [...document.querySelectorAll('#hud-left, .hud-right')].map((el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left - vp.left, right: r.right - vp.left, top: r.top - vp.top, bottom: r.bottom - vp.top };
+  });
+  return { top: Math.max(0, hud.bottom - vp.top), bottom, avoid };
 }
 
 new ResizeObserver(() => renderer?.resize()).observe($('viewport'));

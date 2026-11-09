@@ -1,6 +1,6 @@
 import { createKeeperRun, stepKeeper, KEEPER, specialFor, isWraithSolid, slashHits } from '../src/keeper.js';
 import { createSurvivorRun, stepSurvivor, interactionTarget, canSee, distractionLanding, inBeam, TASKS, PATROLS, SURVIVOR, MONSTERS, WEAPONS } from '../src/survivor.js';
-import { distanceField, isSolid, lineOfSight, moveCircle } from '../src/world.js';
+import { distanceField, isSolid, lineOfSight, moveCircle, tileOf } from '../src/world.js';
 import { sanitize, createStore, defaultSave } from '../src/storage.js';
 import { COSMETICS, ACHIEVEMENTS, MISSIONS, JOURNAL_TIERS, SKILLS, HEROES } from '../src/catalog.js';
 import { cleanName } from '../src/leaderboard-rules.mjs';
@@ -280,6 +280,28 @@ test('Survivor: standing still at the start for 60 s is safe', () => {
   const run = createSurvivorRun();
   for (let i = 0; i < 60 * 60 && !run.outcome; i++) stepSurvivor(run, IDLE, DT);
   assert(!run.outcome, 'caught while idle at the start');
+});
+
+test('Survivor: zombies wander off their old lines, never onto the safe ground round the start', () => {
+  for (const seed of [1, 7, 42]) {
+    const run = createSurvivorRun({ seed });
+    const walkers = run.zombies.filter((z) => z.route);
+    let strayed = 0;
+    for (let i = 0; i < 60 * 90 && !run.outcome; i++) {
+      stepSurvivor(run, IDLE, DT);
+      for (const z of walkers) {
+        const t = tileOf(z);
+        assert(!run.safe[t.r * run.map.w + t.c], `seed ${seed}: zombie ${z.id} wandered onto the safe ground at ${t.c},${t.r}`);
+        // Off its old patrol line: not on the row or column that line ran along.
+        const onLine = z.route.some((a, k) => { const b = z.route[(k + 1) % z.route.length];
+          return (a.r === b.r && Math.abs(t.r - a.r) <= 1 && t.c >= Math.min(a.c, b.c) && t.c <= Math.max(a.c, b.c)) ||
+                 (a.c === b.c && Math.abs(t.c - a.c) <= 1 && t.r >= Math.min(a.r, b.r) && t.r <= Math.max(a.r, b.r)); });
+        if (!onLine) strayed++;
+      }
+    }
+    eq(run.outcome, null, `seed ${seed}: standing at the start stays safe`);
+    assert(strayed > 0, `seed ${seed}: they wander, not just walk their old lines`);
+  }
 });
 
 test('Survivor: zombies cannot see through walls', () => {
@@ -630,17 +652,15 @@ function facingWalker(loadout = {}) {
   return { run, z };
 }
 
-test('Knife: a stab stuns a zombie in front, which cannot catch her until it recovers', () => {
+test('Knife: one strike fells a walker in front of her', () => {
   const { run, z } = facingWalker();
   const ev = stepSurvivor(run, strike, DT);
   assert(ev.some((e) => e.type === 'stab' && e.hit), 'stabbed');
-  eq(z.state, 'stunned');
-  eq(z.stun > 2.9, true);
-  z.x = run.player.x; z.y = run.player.y; // right on top of her
-  for (let i = 0; i < 60; i++) stepSurvivor(run, IDLE, DT);
-  eq(run.outcome, null, 'a stunned zombie is harmless');
+  assert(ev.some((e) => e.type === 'struck' && e.id === z.id && e.hp === 0), 'its health runs out');
+  assert(ev.some((e) => e.type === 'zombieDown' && e.id === z.id), 'it falls');
+  assert(!run.zombies.includes(z), 'and is gone');
   for (let i = 0; i < 60 * 3; i++) stepSurvivor(run, IDLE, DT);
-  eq(run.outcome?.result, 'defeat', 'it recovers and catches her');
+  eq(run.outcome, null, 'nothing left to catch her');
 });
 
 test('Knife: its own button, separate from using things; stabs have a cooldown', () => {
@@ -671,7 +691,7 @@ test('Pistol: shoots further than the knife, uses a round, and the noise draws o
   const ev = stepSurvivor(run, strike, DT);
   assert(ev.some((e) => e.type === 'shot'), 'fired');
   eq(run.weapon.rounds, 5);
-  eq(a.state, 'stunned');
+  assert(!run.zombies.includes(a), 'a shot is a strike: the walker falls');
   eq(b.state, 'investigate', 'came to look at the gunshot');
   // No rounds, no shot: the press becomes a knife swing at the air.
   run.weapon.rounds = 0; run.weapon.cooldown = 0; a.stun = 0; a.state = 'patrol';
@@ -679,25 +699,31 @@ test('Pistol: shoots further than the knife, uses a round, and the noise draws o
   assert(!ev2.some((e) => e.type === 'shot'));
 });
 
-test('Weapons: the top upgrades kill, but the worse things take several hits', () => {
-  const { run, z } = facingWalker({ blade: 3 });
-  stepSurvivor(run, strike, DT);
-  assert(!run.zombies.includes(z), 'a machete fells a walker in one');
-  const { run: r2, z: brute } = facingWalker({ blade: 3 });
-  brute.kind = 'brute';
+// Strikes it takes the knife to fell a zombie of `kind`.
+function strikesToFell(kind, loadout) {
+  const { run, z } = facingWalker(loadout);
+  z.kind = kind;
   let hits = 0;
-  while (r2.zombies.includes(brute) && hits < 10) {
-    brute.stun = 0; r2.weapon.cooldown = 0;
-    stepSurvivor(r2, strike, DT);
+  while (run.zombies.includes(z) && hits < 10) {
+    z.stun = 0; run.weapon.cooldown = 0;
+    stepSurvivor(run, strike, DT);
     hits++;
   }
-  eq(hits, WEAPONS.toughness.brute, 'hits to fell a brute');
-  // Without the top upgrade a brute is only stunned, and more briefly than a walker.
-  const { run: r3, z: b3 } = facingWalker({ blade: 1 });
-  b3.kind = 'brute';
-  stepSurvivor(r3, strike, DT);
-  assert(r3.zombies.includes(b3));
-  eq(b3.stun < WEAPONS.knife.stun[1], true, 'shakes it off faster');
+  return hits;
+}
+
+test('Weapons: the worse things take three strikes, two with the machete, and reel between', () => {
+  for (const kind of ['screamer', 'crawler', 'stalker', 'brute']) eq(strikesToFell(kind, { blade: 1 }), 3, `${kind} with the knife`);
+  eq(strikesToFell('brute', { blade: 3 }), 2, 'the machete hits for two');
+  eq(strikesToFell('walker', { blade: 1 }), 1, 'a walker falls to one');
+  // Between strikes a brute reels, more briefly than a walker would, and its health shows it.
+  const { run, z } = facingWalker({ blade: 1 });
+  z.kind = 'brute';
+  const ev = stepSurvivor(run, strike, DT);
+  assert(run.zombies.includes(z));
+  eq(z.hp, 2, 'two strikes left');
+  assert(ev.some((e) => e.type === 'struck' && e.hp === 2 && e.max === 3));
+  eq(z.stun > 0 && z.stun < WEAPONS.knife.stun[1], true, 'reels, and shakes it off faster');
 });
 
 test('Shop: the blade and pistol upgrades reach the run', () => {

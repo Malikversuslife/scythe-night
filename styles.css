@@ -1483,3 +1483,83 @@ button.stone-card:active { transform: translateY(2px); filter: drop-shadow(0 1px
   .hero-stats li { grid-template-columns: 58px auto 1fr; font-size: 13px; }
   .upgrade-art { width: 72px; height: 72px; }
 }
+
+/* =====================================================================================
+   Phones held sideways (short landscape screens). Height is what runs out: frames are
+   slimmer, the crest goes, type and buttons tighten, and dialogs go wide instead of tall.
+   ===================================================================================== */
+@media (orientation: landscape) and (max-height: 520px) {
+  /* Stone frames: a slimmer rim and no winged crest above the panels. */
+  .stone-panel { border-width: 14px; border-radius: 22px; padding: 6px 8px; }
+  .stone-panel::before { display: none; }
+  .stone-card, .page-intro, .option, .empty, .stat, .run-row { border-width: 12px; border-radius: 18px; }
+  .stone-card { padding: 8px 12px; }
+  .display-title { font-size: 24px; margin-bottom: 4px; }
+  .display-title.small { font-size: 20px; }
+  .stone-btn { min-height: 46px; border-width: 14px; border-radius: 22px; padding-top: 2px; padding-bottom: 2px; }
+  .stone-btn.small { min-height: 42px; border-width: 12px; border-radius: 18px; }
+
+  /* Splash: button names on one line. */
+  .splash-actions .stone-btn { white-space: nowrap; font-size: 15px; padding-left: 16px; padding-right: 16px; }
+
+  /* Menu: a slimmer More button. */
+  .app .screen-menu > .stone-btn { padding: 6px 14px; font-size: 15px; width: auto; min-width: 150px; }
+
+  /* Story intro: the hero and picker on the left, the rules scrolling on the right with Back and
+     Start on their own footer below them, never on top of the text. */
+  .screen-intro { padding: calc(8px + var(--safe-t)) var(--side) calc(8px + var(--safe-b)); }
+  .intro-panel { height: 100%; column-gap: 18px; }
+  .intro-lead { display: flex !important; flex-direction: column; align-items: center; }
+  .intro-lead > * { flex-shrink: 0; }
+  .intro-lead .display-title { margin: 2px 0 0; }
+  .intro-preview { height: 42vh; width: 100%; margin: 0; flex-shrink: 0; }
+  .hero-picker { margin: 2px 0 0; gap: 6px; }
+  .hero-arrow { width: 34px; height: 34px; }
+  .hero-info strong { font-size: 17px; }
+  .hero-info span { font-size: 12px; }
+  .hero-desc { font-size: 12px; margin: 2px 0; }
+  .hero-status { min-height: 0; gap: 6px; }
+  .intro-story { font-size: 13px; line-height: 1.4; }
+  .intro-col:last-child { display: grid !important; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
+  .intro-col:last-child > .intro-scroll { overflow-y: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: rgba(186, 244, 90, .35) transparent; padding-right: 6px; }
+  .intro-col .panel-actions { position: static; margin: 0; padding-top: 8px; background: none; border-top: 1px solid rgba(255, 255, 255, .08); }
+  .intro-col .panel-actions .stone-btn { font-size: 16px; }
+  .rule-list { font-size: 13px; line-height: 1.4; }
+  .rule-list.compact { font-size: 12.5px; }
+
+  /* In play: the hint sits in the top bar between the task and the timer, not over the street. */
+  .screen-game .hud-sub { top: calc(10px + var(--safe-t)) !important; max-width: 34vw; }
+
+  /* Pause: tighter buttons so the whole menu shows at once. */
+  #overlay-pause .overlay-panel { padding: 4px 8px; }
+  .pause-menu { gap: 6px; }
+  .pause-menu .stone-btn { padding-top: 7px; padding-bottom: 7px; font-size: 14px; }
+
+  /* Results: a one-line title and more room for the table. */
+  .results-panel .display-title { font-size: 22px; white-space: nowrap; }
+  .screen-results { padding-top: calc(10px + var(--safe-t)); padding-bottom: 10px; }
+
+  /* Dialogs: wide and short. The shop item puts its picture beside its words and buttons. */
+  .overlay { padding: calc(8px + var(--safe-t)) 16px calc(8px + var(--safe-b)); }
+  .overlay-panel { width: min(100%, 620px); }
+  #overlay-item .overlay-panel {
+    display: grid; grid-template-columns: 150px minmax(0, 1fr); column-gap: 16px; align-items: center;
+    grid-template-areas: "prev title" "prev desc" "prev status" "prev actions";
+  }
+  #item-title { grid-area: title; text-align: left; }
+  #item-preview { grid-area: prev; width: 150px; height: min(62vh, 210px); }
+  #item-desc { grid-area: desc; }
+  #item-status { grid-area: status; }
+  #item-actions { grid-area: actions; }
+
+  /* Settings: the options side by side in two columns, the buttons along the bottom. */
+  .settings-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; align-items: start; }
+  .settings-panel > .display-title, .settings-panel > .fine-print, .settings-panel > .menu-stack:last-child { grid-column: 1 / -1; }
+  .settings-panel > .fine-print { margin: 2px 0; font-size: 12px; }
+  .settings-panel > .menu-stack:last-child { flex-direction: row; }
+  .settings-panel > .menu-stack:last-child .stone-btn { flex: 1; }
+  .settings-panel .setting { margin: 0 0 6px; }
+  .settings-panel .display-title { margin: 0 0 2px; }
+  .settings-panel .stone-btn { font-size: 14px; }
+  .settings-panel > .menu-stack { margin: 2px 0; }
+}

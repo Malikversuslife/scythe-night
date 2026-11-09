@@ -79,7 +79,7 @@ function heroStats(h) {
   const blade = k.blade ?? 1, gun = k.pistolLevel ?? 0, speed = k.speed ?? 1;
   return [
     { label: 'Knife', value: blade + 1, text: blade >= 2 ? 'Sharpened knife' : 'Knife' },
-    { label: 'Pistol', value: gun === 0 ? 0 : gun + 2, text: gun === 0 ? 'Buy one in Upgrades' : `${k.rounds} rounds${gun >= 2 ? ' that can kill' : ''}` },
+    { label: 'Pistol', value: gun === 0 ? 0 : gun + 2, text: gun === 0 ? 'Buy one in Upgrades' : `${k.rounds} rounds${gun >= 2 ? ' that hit for two' : ''}` },
     { label: 'Speed', value: speed > 1 ? 4 : 3, text: speed > 1 ? `${Math.round((speed - 1) * 100)}% faster` : 'Quick and quiet' },
     { label: 'Grit', value: k.secondWind ? 4 : 2, text: k.secondWind ? 'Shakes off the first catch' : 'One touch ends it' },
   ];

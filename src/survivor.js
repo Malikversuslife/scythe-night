@@ -72,14 +72,33 @@ export const SURVIVOR = {
   contact: 0.52,
   repath: 0.25,
   investigateSpeed: 1.8,
+  // Wandering: each zombie roams its home ground (its old patrol line, widened by `wanderReach`
+  // tiles), walking to a random spot, lingering a moment, then picking another. The ground
+  // around the start (`safeRadius` tiles) is never wandered into, so the start stays safe.
+  wanderReach: 4,
+  wanderPause: [0.6, 2.4],
+  safeRadius: 6.5,
 };
 
-// Mara's weapons. A hit stuns a zombie so she can slip past; only the top upgrades can kill.
-// The worse things are tougher: they take several killing hits and shake off stuns faster.
+// A small seeded random number generator, so a run with the same seed wanders the same way.
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Mara's weapons. Every hit is a strike: one fells a walker, the worse things take three. A
+// struck monster reels for a moment (shorter for the tough ones), so she can strike again.
+// Upgrades: a sharpened knife makes them reel longer; the machete and heavy pistol hit for two.
 export const WEAPONS = {
   knife: { reach: 1.15, halfAngle: (70 * Math.PI) / 180, cooldown: 0.7, stun: [0, 3, 4, 5] },
   pistol: { range: 5.5, halfAngle: (12 * Math.PI) / 180, cooldown: 0.5, stun: 4, loud: 6, listen: 3 },
-  toughness: { walker: 1, screamer: 2, crawler: 2, stalker: 3, brute: 4 },
+  toughness: { walker: 1, screamer: 3, crawler: 3, stalker: 3, brute: 3 },
   stunScale: { walker: 1, screamer: 0.75, crawler: 0.75, stalker: 0.6, brute: 0.5 },
 };
 
@@ -112,15 +131,31 @@ export function createSurvivorRun(loadout = {}) {
   const door = map.marks.R[0];
   const objects = {};
   for (const t of TASKS) objects[t.id] = map.marks[t.mark][0];
+  const rng = seeded(loadout.seed ?? 1);
+  // Open tiles near the start, which wandering never enters.
+  const safe = new Uint8Array(map.w * map.h);
+  for (let r = 0; r < map.h; r++) for (let c = 0; c < map.w; c++) {
+    if (Math.hypot(c - start.c, r - start.r) <= SURVIVOR.safeRadius) safe[r * map.w + c] = 1;
+  }
+  // Where a zombie may wander: the open, unsafe tiles round its old patrol line.
+  const homeOf = (route) => {
+    const cs = route.map(([c]) => c), rs = route.map(([, r]) => r), k = SURVIVOR.wanderReach;
+    const c0 = Math.max(1, Math.min(...cs) - k), c1 = Math.min(map.w - 2, Math.max(...cs) + k);
+    const r0 = Math.max(1, Math.min(...rs) - k), r1 = Math.min(map.h - 2, Math.max(...rs) + k);
+    const tiles = [];
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (!isSolid(map, c, r) && !safe[r * map.w + c]) tiles.push({ c, r });
+    return tiles;
+  };
   const kindOf = (i) => (i === MONSTERS.screamer.route ? 'screamer' : i === MONSTERS.brute.route ? 'brute' : 'walker');
   const zombies = PATROLS.map((route, i) => ({
     id: i + 1,
     kind: kindOf(i),
     x: route[0][0] + 0.5, y: route[0][1] + 0.5, r: kindOf(i) === 'brute' ? MONSTERS.brute.r : SURVIVOR.zombieRadius,
     screamCooldown: 0,
-    route: route.map(([c, r]) => ({ c, r })),
-    wp: 1 % route.length,
-    state: 'patrol', // 'patrol' | 'chase' | 'search' | 'return'
+    route: route.map(([c, r]) => ({ c, r })),   // its home ground's spine
+    home: homeOf(route),                         // the tiles it wanders
+    wanderTo: null, pause: rng() * 2,            // where it's heading, and how long it lingers first
+    state: 'patrol', // 'patrol' (wandering) | 'chase' | 'search' | 'investigate' | 'return'
     lost: 0,
     lastSeen: null,
     investigate: 0,
@@ -144,13 +179,14 @@ export function createSurvivorRun(loadout = {}) {
   }
   return {
     campaign: 'survivor',
+    rng, safe,
     rules: {
       distractCooldown: loadout.distractCooldown ?? 22, distractDuration: loadout.distractDuration ?? 3,
       speed: SURVIVOR.playerSpeed * (loadout.speed ?? 1),
     },
     lives: loadout.secondWind ?? 0, // Theo: the first catch only knocks him back
     shaken: 0,                       // seconds of safety after a second wind
-    // blade 1-3: knife, sharpened knife, machete (kills). pistolLevel 0-2: none, pistol, heavy pistol (kills).
+    // blade 1-3: knife, sharpened knife, machete (hits for two). pistolLevel 0-2: none, pistol, heavy pistol (hits for two).
     weapon: { blade: loadout.blade ?? 1, rounds: loadout.rounds ?? 0, pistolLevel: loadout.pistolLevel ?? 0, cooldown: 0, swing: null },
     skillCooldown: 0,
     noise: null, // { x, y, t }: where the last noise-maker landed
@@ -166,6 +202,9 @@ export function createSurvivorRun(loadout = {}) {
     outcome: null,
   };
 }
+
+// How many strikes a zombie can take before it falls.
+export const maxHealth = (z) => WEAPONS.toughness[z.kind] ?? 1;
 
 export function taskIndex(run) {
   return TASKS.findIndex((t) => !run.done[t.id]);
@@ -359,9 +398,10 @@ function updateZombie(run, z, dt, solid, events) {
 
   const patrolSpeed = z.kind === 'brute' ? MONSTERS.brute.patrolSpeed : SURVIVOR.patrolSpeed;
   const chaseSpeed = z.kind === 'brute' ? MONSTERS.brute.chaseSpeed : z.kind === 'screamer' ? MONSTERS.screamer.chaseSpeed : SURVIVOR.chaseSpeed;
+  // Lost her: it doesn't walk back to a post, it just wanders off from where it is.
+  if (z.state === 'return') { z.state = 'patrol'; z.wanderTo = null; z.field = null; }
   if (z.state === 'patrol') {
-    const wp = center(z.route[z.wp]);
-    if (moveToward(run, z, wp, patrolSpeed * dt, solid)) z.wp = (z.wp + 1) % z.route.length;
+    wander(run, z, patrolSpeed * dt, solid, dt);
   } else if (z.state === 'chase' && lineOfSight(run.map, z.x, z.y, run.player.x, run.player.y, solid)) {
     moveToward(run, z, run.player, chaseSpeed * dt, solid);
   } else {
@@ -375,6 +415,35 @@ function updateZombie(run, z, dt, solid, events) {
     }
   }
   if (z.kind === 'brute') smashUnder(run, z, events);
+}
+
+// Wandering: head for a random spot on its home ground, linger there a moment (looking about),
+// then pick another. It keeps off the ground round the start.
+function wander(run, z, step, solid, dt) {
+  if (z.pause > 0) {
+    z.pause -= dt;
+    if (run.rng() < dt * 0.8) { const a = run.rng() * Math.PI * 2; z.fx = Math.cos(a); z.fy = Math.sin(a); }
+    return;
+  }
+  if (!z.wanderTo) {
+    const here = tileOf(z);
+    const far = z.home.filter((t) => Math.abs(t.c - here.c) + Math.abs(t.r - here.r) >= 3);
+    const pool = far.length ? far : z.home;
+    if (!pool.length) return;
+    z.wanderTo = pool[Math.floor(run.rng() * pool.length)];
+    z.field = null;
+  }
+  // Paths go round the start's safe ground, unless it is already standing in it.
+  const here = tileOf(z);
+  const inSafe = run.safe[here.r * run.map.w + here.c];
+  const avoid = inSafe ? solid : (m, c, r) => solid(m, c, r) || run.safe[r * m.w + c] === 1;
+  followField(run, z, z.wanderTo, step, avoid, dt);
+  const t = tileOf(z);
+  if ((t.c === z.wanderTo.c && t.r === z.wanderTo.r && dist2(z, center(z.wanderTo)) < 0.05) || z.field?.[t.r * run.map.w + t.c] < 0) {
+    z.wanderTo = null;
+    const [a, b] = SURVIVOR.wanderPause;
+    z.pause = a + run.rng() * (b - a);
+  }
 }
 
 // ---------------- Mara's weapons ----------------
@@ -398,15 +467,15 @@ function inArc(run, z, reach, half) {
 
 const nearestOf = (run, list) => list.reduce((a, z) => (!a || dist2(z, run.player) < dist2(a, run.player) ? z : a), null);
 
-function hitZombie(run, z, stun, kills, events) {
-  if (kills) {
-    z.hp = (z.hp ?? WEAPONS.toughness[z.kind] ?? 1) - 1;
-    if (z.hp <= 0) {
-      run.zombies = run.zombies.filter((o) => o !== z);
-      run.downed = (run.downed || 0) + 1;
-      events.push({ type: 'zombieDown', id: z.id, x: z.x, y: z.y });
-      return;
-    }
+// A strike takes `damage` from a zombie's health. At none it falls; otherwise it reels.
+function hitZombie(run, z, stun, damage, events) {
+  z.hp = Math.max(0, (z.hp ?? maxHealth(z)) - damage);
+  events.push({ type: 'struck', id: z.id, hp: z.hp, max: maxHealth(z) });
+  if (z.hp <= 0) {
+    run.zombies = run.zombies.filter((o) => o !== z);
+    run.downed = (run.downed || 0) + 1;
+    events.push({ type: 'zombieDown', id: z.id, kind: z.kind, x: z.x, y: z.y, fx: z.fx, fy: z.fy });
+    return;
   }
   z.stun = stun * (WEAPONS.stunScale[z.kind] ?? 1);
   z.state = 'stunned';
@@ -431,7 +500,7 @@ function attack(run, events) {
     w.cooldown = K.cooldown;
     w.swing = { t: 0, angle: Math.atan2(p.fy, p.fx), hit: true };
     events.push({ type: 'stab', hit: true, x: close.x, y: close.y });
-    hitZombie(run, close, K.stun[w.blade], w.blade >= 3, events);
+    hitZombie(run, close, K.stun[w.blade], w.blade >= 3 ? 2 : 1, events);
     return true;
   }
   if (w.rounds > 0) {
@@ -440,7 +509,7 @@ function attack(run, events) {
       w.rounds--;
       w.cooldown = G.cooldown;
       events.push({ type: 'shot', x0: p.x, y0: p.y, x1: far.x, y1: far.y, rounds: w.rounds });
-      hitZombie(run, far, G.stun, w.pistolLevel >= 2, events);
+      hitZombie(run, far, G.stun, w.pistolLevel >= 2 ? 2 : 1, events);
       // A gunshot is loud: everything near that isn't already on her comes to look.
       for (const z of run.zombies) {
         if (z === far || z.stun > 0 || z.state === 'dormant' || z.state === 'lurk' || z.state === 'chase') continue;
