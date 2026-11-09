@@ -528,9 +528,6 @@ setupMenuNav({
   onKeyboard() { app.classList.add('keyboard-nav'); },
 });
 
-// Turning a phone upright mid-run pauses it: the game is hidden behind the turn-sideways prompt.
-const upright = matchMedia('(orientation: portrait) and (pointer: coarse)');
-upright.addEventListener?.('change', () => { if (upright.matches) pause(); });
 
 // ---------------- Live announcements & toast ----------------
 
@@ -1185,8 +1182,9 @@ function viewInsets() {
   const hud = $('hud-sub').getBoundingClientRect();
   const controls = $('controls').getBoundingClientRect();
   // In landscape the touch controls sit in the corners and the camera can use the full height;
-  // on desktop they're hidden. Only an upright screen keeps a band free for them.
-  const bottom = controls.height && !landscape.matches ? Math.max(0, vp.bottom - controls.top) : 0;
+  // on desktop they're hidden. Upright, the street shows behind the controls, and the camera only
+  // keeps the hero clear of the lower part where the thumbs are.
+  const bottom = controls.height && !landscape.matches ? Math.max(0, vp.bottom - controls.top) * 0.6 : 0;
   // The HUD's corner panels, for edge arrows to steer around.
   const avoid = [...document.querySelectorAll('#hud-left, .hud-right')].map((el) => {
     const r = el.getBoundingClientRect();

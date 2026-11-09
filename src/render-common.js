@@ -136,7 +136,7 @@ export function blitVisible(ctx, layer, worldW, worldH, cx, cy, cssW, cssH) {
 // windows size tiles by height instead, so landscape and desktop show more of the world around.
 export function tileSize(cssW, cssH, across) {
   if (cssW > cssH) return clamp(cssH / (across * 1.15), 36, 84);
-  return clamp(cssW / across, 34, 66);
+  return clamp(cssW / across, 34, 84);
 }
 
 // Smoothed follow camera that keeps the player in the band between the HUD and controls.

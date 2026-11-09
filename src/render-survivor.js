@@ -345,7 +345,9 @@ export function createSurvivorRenderer(images) {
     const dt = clamp(time - lastTime, 0, 0.1);
     lastTime = time;
 
-    const t = tileSize(cssW, cssH, 7); // close enough that people, drawn to real scale, stay easy to see
+    // Close enough that people, drawn to real scale, stay easy to see: 7 tiles tall sideways,
+    // 5.5 tiles across on a phone held upright.
+    const t = tileSize(cssW, cssH, cssW > cssH ? 7 : 5.5);
     if (cache && guard.isLost(layers())) cache = null;
     if (!cache || cache.t !== t || cache.dpr !== dpr || cache.run !== run) {
       cache = { ground: buildGround(run, t, dpr), buildings: buildCity(run, t, dpr), furniture: streetFurniture(map), t, dpr, run };
